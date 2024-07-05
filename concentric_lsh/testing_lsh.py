@@ -15,17 +15,18 @@ K = torch.randint(-20, 21, (n, d)).float()
 V = torch.randint(-20, 21, (n, d)).float()
 
 k = int(math.pow(n, 2/3))
+k = 30
 l = k
 
 # Call the sampling_attention function.
 # Measure the time it takes to run the function.
 start_time = time.time()
-lsh_objects = topk_indices_lsh_preprocessing(K, B=10.0, verbose=False, normalize=True)
+lsh_objects = topk_indices_lsh_preprocessing(K, B=10.0, verbose=True, c=20.0)
 
 print("Pre-processing done in time ", time.time() - start_time)
 
-# for lsh_object in lsh_objects:
-#     lsh_object.print_buckets()
+for lsh_object in lsh_objects:
+    lsh_object.print_buckets()
 
 attention_output = sampling_attention.sampling_attention(Q, K, V, \
                                                          k, \

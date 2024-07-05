@@ -4,25 +4,18 @@ import torch
 
 # LSH class for approximate nearest neighbor search.
 class angularLSH:
-    def __init__ (self, K, s, b, B, verbose=False, normalize=False):
+    def __init__ (self, K, s, b, B, verbose=False):
         self.K = K.clone()
         self.s = s
         self.b = b
         self.n, self.d = self.K.size()
         self.B = B
 
-        if normalize:
-            # Normalize the key vectors by dividing with d:
-            self.K = self.K / self.d
-
-            # Normalize further by dividing all the key vectors by B*B
-            self.K = self.K / (B*B)
-
         # Now add an extra dimension to the key vectors to 
-        # make them all have norm B*B - the maximum it could be. 
+        # make them all have norm d*B*B - the maximum it could be. 
         # Now all the key vectors have d+1 dimensions.
-        # self.K = torch.cat((self.K, torch.sqrt(B*B - torch.sum(self.K**2, dim=1, keepdim=True))), dim=1)
-        # self.d += 1
+        self.K = torch.cat((self.K, torch.sqrt(self.d*B*B - torch.sum(self.K**2, dim=1, keepdim=True))), dim=1)
+        self.d += 1
 
         # LSH works as follows:
         # 1. To hash a single vector, concatenate k = O(log n) smaller hashes. 
@@ -32,13 +25,13 @@ class angularLSH:
         # HEY!
         #   Note we might need to adjust the number of hash tables and the number of bits in each hash.
         #   This is a heuristic.
-        self.k = 7 # int(0.5 * math.ceil(math.log2(self.n) / (-math.log2(1-np.arccos(self.s)/math.pi))))
-        self.L = 10 # 0.5 * math.log2(1-np.arccos(self.b)/math.pi) / math.log2(1-np.arccos(self.s)/math.pi) 
+        self.k = int(0.5 * math.ceil(math.log2(self.n) / (-math.log2(1-np.arccos(self.s / (self.d * B * B))/math.pi))))
+        self.L = int(0.5 * math.log2(1-np.arccos(self.b / (self.d*B*B))/math.pi) / math.log2(1-np.arccos(self.s / (self.d * B *B))/math.pi))
 
         # if verbose:
         #     print(f"Power of L: {self.L}")
 
-        # self.L = int(math.pow(self.n, self.L))
+        self.L = int(math.pow(self.n, self.L))
 
         if verbose:
             print(f"Creating {self.L} hash tables with {self.k} bits each.")
@@ -106,8 +99,8 @@ class angularLSH:
             if hj in self.hash_tables[j]:
                 for key_index in self.hash_tables[j][hj]:
 
-                    # Check if the key vector has a dot product of at most cr with the query vector.
-                    if torch.dot(q, self.K[key_index]) >= self.b:
+                    # Check if the key vector has a dot product of at most b with the query vector.
+                    if torch.dot(q, self.K[key_index]) > self.b:
                         continue
                     
                     # Add the key index to the set of distinct keys.

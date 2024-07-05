@@ -5,20 +5,14 @@ import numpy as np
 
 # We will create a sequence of concentric LSH objects with increasing r values.
 # !! Note !! - c requires tweaking! It is a hyperparameter that can be adjusted.
-def topk_indices_lsh_preprocessing(K, B, verbose=False, normalize=False, c=1):
+def topk_indices_lsh_preprocessing(K, B, verbose=False, c=1):
     current_s = 0
-
-    # Divide all the key vectors by d.
-    K = K / K.size(1)
-
-    if verbose:
-        print(f"Creating {int(1/(c)) - 1} LSH objects.")
 
     # We will create a sequence of LSH objects with increasing r values.
     # We cannot go all the way to 1, because then we get instability issues.
     lsh_objects = []
     while current_s < B*B - c:
-        lsh_objects.append(angularLSH(K, s=current_s, b=current_s+c, B=B, verbose=verbose, normalize=normalize))
+        lsh_objects.append(angularLSH(K, s=current_s, b=current_s+c, B=B, verbose=verbose))
         current_s += c
 
     return lsh_objects
@@ -44,17 +38,13 @@ def topk_indices_lsh_preprocessing(K, B, verbose=False, normalize=False, c=1):
 #   attention_scores is a tensor of size k containing the attention scores.
 #   keys is a list of the indices of the top-k keys.
 #
-def topk_indices_fast_lsh(q, K, k, B, lsh_objects, verbose=False, normalize=False):
+def topk_indices_fast_lsh(q, K, k, B, lsh_objects, index, verbose=False):
 
     n, d = K.size()
 
-    # If the query vector q has d dimensions, we add an extra dimension of 0.
+    # We add a zero to the query vector to make it d+1.
     q_normalized = q.clone()
-    # q_normalized = torch.cat((q_normalized, torch.tensor([0.0])))
-
-    # Normlize q to have norm 1.
-    if normalize:
-        q_normalized = q_normalized / torch.norm(q_normalized)
+    q_normalized = torch.cat((q_normalized, torch.tensor([0.0])))
 
     keys_before = set()
     keys_after = set()
@@ -91,7 +81,7 @@ def topk_indices_fast_lsh(q, K, k, B, lsh_objects, verbose=False, normalize=Fals
     # Now we have the top-k keys. We will calculate the attention scores for these keys.
     attention_scores = torch.zeros(len(keys))
     for i, key in enumerate(keys):
-        attention_scores[i] = torch.dot(q, (K[key, :])) - B*B
+        attention_scores[i] = torch.dot(q, (K[key, :] / d)) - B*B
         attention_scores[i] = torch.exp(attention_scores[i])
 
     return attention_scores, list(keys)
