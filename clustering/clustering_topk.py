@@ -59,6 +59,7 @@ def clustering_topk_preprocessing_ivff_index(K, B, voronoi_cells=100, nprobe=10,
     return index
 
 def clustering_topk(Q, K, k, B, index, lsh_objects = None, verbose=False):
+    n,d = Q.size()
 
     # Append a zero to each query vector to match the dimension of the key vectors.
     Q = torch.cat((Q, torch.zeros(Q.size(0), 1)), dim=1)
@@ -69,6 +70,7 @@ def clustering_topk(Q, K, k, B, index, lsh_objects = None, verbose=False):
     D, I = index.search(Q.numpy(), k)
 
     D = torch.tensor(D)
+    print(D)
 
     # For each row of D, we have the distances ||q - k_i||.
     # We will use these to calculate the attention scores.
@@ -83,9 +85,36 @@ def clustering_topk(Q, K, k, B, index, lsh_objects = None, verbose=False):
 
     # Finally, we calculate the attention scores
     attention_scores = 0.5 * (q_norm + k_norm - D**2)
-
-    attention_scores = torch.exp(attention_scores - B*B)
+    attention_scores = torch.exp(attention_scores / d - B*B)
 
     return attention_scores, I
 
+def clustering_topk_preprocessing_ip_index(K, B, voronoi_cells=100, nprobe=10, verbose=False, Q=None, k=None):
+    n,d = K.size()
+    # We will use the Faiss library to perform the clustering.
 
+    # Build a FAISS Flat index:
+    index = faiss.IndexFlatIP(d)
+
+    K_normalized = K.clone()
+
+    # Add the normalized key vectors to the index
+    index.add(K_normalized.numpy().astype('float32'))
+
+    # Search for each query vector in Q in the index for
+    # its k nearest neighbors.
+    # This takes O(nk) time.
+    D, I = index.search(Q.numpy().astype('float32'), k)
+    D = torch.tensor(D) / d
+
+    # For numerical stability, subtract the maximum value from each row of D
+    max_D = torch.max(D, dim=1, keepdim=True)[0]
+    D = D - max_D
+
+    # Finally, we calculate the attention scores
+    attention_scores = torch.exp(D)
+
+    return attention_scores, I, max_D
+
+def clustering_topk_ip_index(Q, K, k, B, index, lsh_objects = None, verbose=False):
+    pass

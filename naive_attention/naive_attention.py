@@ -12,7 +12,7 @@ def multiply(Q, K):
     return result
             
 
-def calculate_attention(Q, K, V, B):
+def calculate_attention(Q, K, V):
     n, d = Q.size()
 
     # Calculate the dot product of Q and K
@@ -20,9 +20,6 @@ def calculate_attention(Q, K, V, B):
 
     # Normalize the attention scores by dividing by d.
     attention_scores = attention_scores / d
-
-    # Numerical stability
-    attention_scores -= B*B
     
     # Apply softmax to get the attention weights
     attention_weights = torch.softmax(attention_scores, dim=-1)

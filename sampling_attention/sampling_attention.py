@@ -147,7 +147,7 @@ def sampling_attention_clustering_v1(Q, K, V, k, l, topk_scores, topk_indices, B
 #   k is the number of top-k elements to consider
 #   l is the number of samples to draw from the remaining elements
 #   topk_indices_func is a function that returns the top-k indices of the attention scores
-#   B is the maximum value of the q,k,v elements. We use this to avoid numerical instability.
+#   B is a normalizer for the attention scores: 1 x n
 #
 #   topk_scores is the top-k attention scores for all the queries
 #   topk_indices is the top-k indices for all the queries
@@ -180,12 +180,11 @@ def approximate_softmax_expectation_v2(q, K, V, \
             random_indices.append(index)
 
     # Now we'll evaluate the partition function and the expectation separately.
-
     approx_partition = 0
     approx_expectation = torch.zeros(d)
     for index in random_indices:
         # Calculate the attention score for the remaining elements
-        attention_score = torch.exp(torch.dot(q, K[index]) / d - B*B)
+        attention_score = torch.exp(torch.dot(q, K[index]) - B[query_idx])
 
         # Add the attention score to the partition function
         approx_partition += attention_score

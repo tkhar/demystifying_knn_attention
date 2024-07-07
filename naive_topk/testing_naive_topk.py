@@ -31,3 +31,4 @@ print("Time taken for exact attention:", end_time - start_time)
 
 # Print the mean absolute error
 print("Mean error: ", torch.mean(torch.abs(attention_output - exact_attention_output)))
+print("Max error: ", torch.max(torch.abs(attention_output - exact_attention_output)))
