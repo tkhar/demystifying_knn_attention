@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import time
+from memory_profiler import profile
 
 #
 # Approximating the expected value of a value vector v with underlying distribution
@@ -173,16 +174,26 @@ def approximate_softmax_expectation_v2(q, K, V, \
         indices = topk_indices[query_idx] # k x 1
 
     # From the n-k remaining elements, draw l samples.
-    random_indices = []
-    while len(random_indices) < l:
-        index = np.random.randint(n)
-        if index not in indices:
-            random_indices.append(index)
+    # random_indices = []
+    # while len(random_indices) < l:
+    #     index = np.random.randint(n)
+    #     if index not in indices:
+    #         random_indices.append(index)
 
     # Now we'll evaluate the partition function and the expectation separately.
     approx_partition = 0
     approx_expectation = torch.zeros(d)
-    for index in random_indices:
+    
+    i = 0
+    while i < l:
+
+        index = np.random.randint(n)
+
+        if index in indices:
+            continue
+
+        i = i + 1
+
         # Calculate the attention score for the remaining elements
         attention_score = torch.exp(torch.dot(q, K[index]) - B[query_idx])
 
@@ -204,6 +215,7 @@ def approximate_softmax_expectation_v2(q, K, V, \
 
 # Clustering sampling attention
 # Version 2: Use the same samples for a given query for all the value vectors.
+@profile
 def sampling_attention_clustering_v2(Q, K, V, k, l, topk_scores, topk_indices, B):
     n,d = Q.size()
 
@@ -223,6 +235,7 @@ def sampling_attention_clustering_v2(Q, K, V, k, l, topk_scores, topk_indices, B
         # Time this function
         # import time
         # start_time = time.time()
+        # Takes around O(l) time.
         output[i, :] = approximate_softmax_expectation_v2(Q[i], K, V, \
                                                           k, l, \
                                                           None, B, \

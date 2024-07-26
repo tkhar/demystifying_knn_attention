@@ -1,7 +1,7 @@
 import torch
 import time
 import numpy as np
-from naive_topk.naive_topk import topk_indices_naive
+from naive_topk import topk_indices_naive
 from sampling_attention import sampling_attention
 from naive_attention import naive_attention
 import math

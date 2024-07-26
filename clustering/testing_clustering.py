@@ -8,10 +8,92 @@ from sampling_attention import sampling_attention
 from naive_attention import naive_attention
 import math
 
-run_exact = False
+def run_experiment(Q, K, V, n, d, B, run_exact=True, store=False, verbose=False):
 
-n, d = 5000, 30
-B = 10
+    # After a certain threshold, increasing the number of clusters does not improve the accuracy.
+    k = int(math.pow(n, 1/2))
+    l = 1
+
+    print(f"k = {k}, l = {l}")
+
+    # Call the clustering_topk_preprocessing function.
+    # Measure the time it takes to run the function.
+    start_time = time.time()
+    topk_scores, topk_indices, normalizer = clustering_topk_preprocessing_ip_index(K, B, voronoi_cells=100, nprobe=10, verbose=False, Q=Q, k=k)
+
+    # Get the top-k attention scores and indices.
+    # topk_scores, topk_indices = clustering_topk(Q, K, k, B, index, verbose=False)
+
+    print("Time taken for clustering_topk_preprocessing:", time.time() - start_time)
+
+    # Call the sampling_attention function.
+    attention_output = \
+        sampling_attention.sampling_attention_clustering_v2(Q, K, V, \
+                                                            k, l, \
+                                                            topk_scores, \
+                                                            topk_indices, \
+                                                            normalizer)
+    end_time = time.time()
+    print("Time taken for approximate attention:", end_time - start_time)
+
+    if verbose:
+        print(attention_output)
+        print("\n\n")
+
+    if not run_exact:
+        exit()
+
+    # Compare with the exact attention output
+
+    # If we have saved the result to a file, we can load it here.
+    output_path = "exact_attention_output_" + str(n) + "_" + str(d) + ".pt"
+    time_path = "exact_attention_time_" + str(n) + "_" + str(d) + ".txt"
+
+    if os.path.exists(output_path) and store:
+        print("Loading exact attention output from file.")
+        exact_attention_output = torch.load(output_path)
+
+        # We should also have the time taken to calculate the exact attention.
+        with open(time_path, "r") as f:
+            exact_time = float(f.readline())
+        
+        print("Time taken for exact attention:", exact_time)
+        max_error = torch.max(torch.abs(attention_output - exact_attention_output))
+        print("Max error: ", torch.max(torch.abs(attention_output - exact_attention_output)))
+        print("Mean error: ", torch.mean(torch.abs(attention_output - exact_attention_output)))
+
+        if verbose:
+            print(exact_attention_output)
+    else:
+        print("Calculating exact attention.")
+        # Calculate the time taken to run the calculate_attention function.
+        start_time = time.time()
+        exact_attention_output = naive_attention.calculate_attention(Q, K, V)
+        end_time = time.time()
+        print("Time taken for exact attention:", end_time - start_time)
+
+        if verbose:
+            print(exact_attention_output)
+
+        # Print the mean absolute error
+        max_error = torch.max(torch.abs(attention_output - exact_attention_output))
+        print("Max error: ", max_error)
+        print("Mean error: ", torch.mean(torch.abs(attention_output - exact_attention_output)))
+
+        if store:
+            # Save result to file.
+            # The file should be named: exact_attention_output_n_d.pt
+            torch.save(exact_attention_output, output_path)
+
+            # Write the time taken to a file also. The file should be named: exact_attention_time_n_d.txt
+            with open(time_path, "w") as f:
+                f.write(str(end_time - start_time))
+
+    return max_error
+
+torch.manual_seed(0)
+n, d = 10000, 700
+B = 100
 
 # Generate n x d random matrices with entries in [-B,B].
 # These are real numbers.
@@ -24,63 +106,10 @@ Q = Q.float()
 K = K.float()
 V = V.float()
 
-# After a certain threshold, increasing the number of clusters does not improve the accuracy.
-k = l = int(math.pow(n, 1/2) * 5)
+num_iterations = 1
 
-print(f"k = {k}, l = {l}")
+estimate = 0
+for i in range(num_iterations):
+    estimate += run_experiment(Q, K, V, n, d, B, run_exact=True, store=True, verbose=False)
 
-# Call the clustering_topk_preprocessing function.
-# Measure the time it takes to run the function.
-start_time = time.time()
-topk_scores, topk_indices, normalizer = clustering_topk_preprocessing_ip_index(K, B, voronoi_cells=100, nprobe=10, verbose=False, Q=Q, k=k)
-
-# Get the top-k attention scores and indices.
-# topk_scores, topk_indices = clustering_topk(Q, K, k, B, index, verbose=False)
-
-print("Time taken for clustering_topk_preprocessing:", time.time() - start_time)
-
-# Call the sampling_attention function.
-attention_output = \
-    sampling_attention.sampling_attention_clustering_v2(Q, K, V, \
-                                                        k, l, \
-                                                        topk_scores, \
-                                                        topk_indices, \
-                                                        normalizer)
-end_time = time.time()
-print("Time taken for approximate attention:", end_time - start_time)
-
-# Compare with the exact attention output
-
-# If we have saved the result to a file, we can load it here.
-output_path = "exact_attention_output_" + str(n) + "_" + str(d) + ".pt"
-time_path = "exact_attention_time_" + str(n) + "_" + str(d) + ".txt"
-
-if os.path.exists(output_path) and run_exact == False:
-    exact_attention_output = torch.load(output_path)
-
-    # We should also have the time taken to calculate the exact attention.
-    with open(time_path, "r") as f:
-        exact_time = float(f.readline())
-
-    
-    print("Time taken for exact attention:", exact_time)
-    print("Max error: ", torch.max(torch.abs(attention_output - exact_attention_output)))
-    print("Mean error: ", torch.mean(torch.abs(attention_output - exact_attention_output)))
-else:
-    # Calculate the time taken to run the calculate_attention function.
-    start_time = time.time()
-    exact_attention_output = naive_attention.calculate_attention(Q, K, V)
-    end_time = time.time()
-    print("Time taken for exact attention:", end_time - start_time)
-
-    # Print the mean absolute error
-    print("Max error: ", torch.max(torch.abs(attention_output - exact_attention_output)))
-    print("Mean error: ", torch.mean(torch.abs(attention_output - exact_attention_output)))
-
-    # Save result to file.
-    # The file should be named: exact_attention_output_n_d.pt
-    torch.save(exact_attention_output, output_path)
-
-    # Write the time taken to a file also. The file should be named: exact_attention_time_n_d.txt
-    with open(time_path, "w") as f:
-        f.write(str(end_time - start_time))
+print("Average max error = ", estimate / num_iterations)

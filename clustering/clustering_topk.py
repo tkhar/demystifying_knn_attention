@@ -1,5 +1,6 @@
 import torch
 import faiss
+from memory_profiler import profile
 
 # 
 # Function for preprocessing the input data for clustering_topk
@@ -89,6 +90,7 @@ def clustering_topk(Q, K, k, B, index, lsh_objects = None, verbose=False):
 
     return attention_scores, I
 
+@profile
 def clustering_topk_preprocessing_ip_index(K, B, voronoi_cells=100, nprobe=10, verbose=False, Q=None, k=None):
     n,d = K.size()
     # We will use the Faiss library to perform the clustering.
