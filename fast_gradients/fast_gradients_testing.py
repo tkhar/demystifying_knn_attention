@@ -15,10 +15,10 @@ vocab_size = 100
 d = 10
 
 # Input sequence length
-N = 100
+N = 10000
 
-mu = 20
-std = 10
+mu = 100
+std = 20
 
 # Q,K,V matrices - input to self-attention
 Q = torch.randn(N, d, requires_grad=True) * std + mu

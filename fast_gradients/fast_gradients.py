@@ -27,7 +27,7 @@ def fast_grad_V(Q, K, V, dO,e=1e-1):
 
     # For each column vector of dO, calculate P^T dO:
     for j in range(Q.shape[1]):
-        estimated_dV_j = approximate_product(Q, K, dO[:,j], num_samples=math.ceil(Q.shape[0] * math.log(Q.shape[0]) / e**2))
+        estimated_dV_j = approximate_product(Q, K, dO[:,j], num_samples=math.ceil(Q.shape[1] * math.log(Q.shape[0]) / e))
         dV[:,j] = estimated_dV_j
 
     return dV
