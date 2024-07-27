@@ -82,7 +82,7 @@ def softmax_sample(Q, K, i, S_i):
 # 
 # Output:
 # - The expectation of f with respect to the softmax distribution.   
-def softmax_expectation(Q, K, i, f, S_i,epsilon=0.1,delta=0.1):
+def softmax_expectation_estimation(Q, K, i, f, S_i, epsilon=0.1, delta=0.1):
     n = Q.shape[0]
     k = len(S_i)
 
@@ -96,9 +96,9 @@ def softmax_expectation(Q, K, i, f, S_i,epsilon=0.1,delta=0.1):
     expectations = []
     for _ in range(int(np.log(1/delta))):
         samples = []
-        for _ in range(int(1/epsilon**2)):
+        for _ in range(int(1/(epsilon**2))):
             index = softmax_sample(Q, K, i, S_i)
-            samples.append(f(index))
+            samples.append(f[index])
         expectations.append(np.mean(samples))
 
     return np.median(expectations)

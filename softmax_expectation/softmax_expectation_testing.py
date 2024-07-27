@@ -1,5 +1,5 @@
 import torch
-from softmax_expectation.softmax_expectation import softmax_sample, softmax_expectation
+from softmax_expectation.softmax_expectation import softmax_sample, softmax_expectation_estimation
 from softmax_expectation.topk import topk
 import matplotlib.pyplot as plt
 
@@ -32,9 +32,9 @@ for _ in range(100):
 
 # Draw the two histograms.
 # The two histograms should be similar. If they are not, there is a bug in the sampling method.
-plt.bar(range(N), histogram_true)
-plt.bar(range(N), histogram_sampled)
-plt.show()
+# plt.bar(range(N), histogram_true)
+# plt.bar(range(N), histogram_sampled)
+# plt.show()
 
 # Now we will test the expectation method.
 # We will calculate the expectation of the function f(j) = j.
@@ -42,8 +42,8 @@ plt.show()
 # Analytically, we just have to evaluate the inner product of (Q[0] @ K[j]^T)_{j=1}^n * f.
 
 expectation_true = torch.sum(distribution * torch.arange(N))
-expectation_sampled = softmax_expectation(Q, K, 0, lambda j: j, S_i[0,:].tolist(), epsilon=0.05, delta=0.05)
+expectation_sampled = softmax_expectation_estimation(Q, K, 0, torch.arange(N), S_i[0,:].tolist(), epsilon=0.05, delta=0.05)
 
 print(f"True expectation: {expectation_true}")
 print(f"Sampled expectation: {expectation_sampled}")
-print(f"Error: {expectation_true - expectation_sampled}")
+print(f"Error: {torch.abs(expectation_true - expectation_sampled)}")

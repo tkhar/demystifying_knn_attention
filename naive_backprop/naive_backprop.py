@@ -26,3 +26,35 @@ def grad_V(Q, K, V, dO):
     dV = torch.mm(P.t(), dO)
 
     return dV
+
+def dP(dO, V, i, j):
+    return dO[i,:] @ V[j,:]
+
+def P(Q, K, i,j):
+    distribution = torch.softmax(Q[i,:] @ K.T, dim=0)
+    return distribution[j]
+
+def dPP(Q,K,V,dO,i):
+    n,d = Q.shape
+    ip = 0
+    for k in range(n):
+        ip += dP(dO, V, i, k) * P(Q,K,i,k)
+    
+    return ip
+
+def grad_Q(Q, K, V, dO):
+    dQ = torch.zeros_like(Q)
+
+    n, d = Q.shape
+
+    for i in range(n):
+        for j in range(d):
+            for k in range(n):
+                dQ[i,j] += P(Q,K,i,k) * (dP(dO,V, i, k) - dPP(Q,K,V,dO,i)) * K[k,j]
+
+    return dQ
+
+def grad_K(Q, K, V, dO):
+    dK = torch.zeros_like(K)
+
+    pass
