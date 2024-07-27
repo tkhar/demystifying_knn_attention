@@ -1,6 +1,8 @@
 import torch
 import math
 from random_walk_simulation.random_walk import approximate_product, simulate_random_walks
+from softmax_expectation.softmax_expectation import softmax_expectation_estimation
+from softmax_expectation.topk import topk
 
 # Fast self-attention backpropagation.
 # Suppose we have some loss function f.
@@ -32,8 +34,40 @@ def fast_grad_V(Q, K, V, dO,e=1e-1):
 
     return dV
 
-def fast_grad_Q(Q,K,V, dO, e=1e-1):
-    pass
+def fast_grad_Q(Q,K,V, dO, epsilon=0.05, delta=0.1):
+    dQ = torch.zeros_like(Q)
 
-def fast_grad_K(Q,K,V, dO, e=1e-1):
-    pass
+    n, d = Q.shape
+    S = topk(Q, K, int(math.sqrt(n)))
+
+    for i in range(n):
+        for j in range(d):
+            F_1 = torch.tensor([0] * n, dtype=torch.float64)
+            for k in range(n):
+                F_1[k] = K[k,j] * (dO[i,:] @ V[k,:])
+
+            E_1 = softmax_expectation_estimation(Q, K, i, F_1, S[i,:], epsilon=epsilon, delta=delta)
+            # print(f"E_1: {E_1}")
+
+            E_2 = softmax_expectation_estimation(Q, K, i, K[:,j], S[i,:], epsilon=epsilon, delta=delta)
+            # print(f"E_2: {E_2}")
+
+            F_3 = torch.tensor([0] * n, dtype=torch.float64)
+            for k in range(n):
+                F_3[k] += (dO[i,:] @ V[k,:])
+
+            E_3 = softmax_expectation_estimation(Q, K, i, F_3, S[i, :], epsilon=epsilon, delta=delta)
+            # print(f"E_3: {E_3}")
+
+            dQ[i,j] = E_1 - E_2 * E_3
+
+    return dQ
+
+def fast_grad_K(Q,K,V, dO, epsilon=0.05, delta=0.1):
+    dK = torch.zeros_like(K)
+
+    n, d = Q.shape
+
+    S = topk(Q, K, int(math.sqrt(n)))
+
+    

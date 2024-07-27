@@ -57,4 +57,11 @@ def grad_Q(Q, K, V, dO):
 def grad_K(Q, K, V, dO):
     dK = torch.zeros_like(K)
 
-    pass
+    n, d = Q.shape
+
+    for i in range(n):
+        for j in range(d):
+            for k in range(n):
+                dK[i,j] += P(Q,K,k,i) * (dP(dO,V,k, i) - dPP(Q,K,V,dO,k)) * Q[k,j]
+    
+    return dK

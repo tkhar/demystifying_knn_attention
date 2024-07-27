@@ -4,11 +4,11 @@ from softmax_expectation.topk import topk
 import matplotlib.pyplot as plt
 
 # Input sequence length
-N = 100
-d = 10
+N = 10
+d = 5
 
 mu = 2
-std = 0.01
+std = 2
 
 Q = torch.randn(N, d) * std + mu
 K = torch.randn(N, d) * std + mu
@@ -42,7 +42,7 @@ for _ in range(100):
 # Analytically, we just have to evaluate the inner product of (Q[0] @ K[j]^T)_{j=1}^n * f.
 
 expectation_true = torch.sum(distribution * torch.arange(N))
-expectation_sampled = softmax_expectation_estimation(Q, K, 0, torch.arange(N), S_i[0,:].tolist(), epsilon=0.05, delta=0.05)
+expectation_sampled = softmax_expectation_estimation(Q, K, 0, torch.arange(N), S_i[0,:].tolist(), epsilon=0.01, delta=0.05)
 
 print(f"True expectation: {expectation_true}")
 print(f"Sampled expectation: {expectation_sampled}")
