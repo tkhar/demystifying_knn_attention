@@ -102,19 +102,15 @@ else:
 Q_copy = Q.clone().detach().requires_grad_(False)
 K_copy = K.clone().detach().requires_grad_(False)
 V_copy = V.clone().detach().requires_grad_(False)
-# dQ_fast = fast_grad_Q_faster(Q_copy, K_copy, V_copy, O.grad, epsilon=0.005,delta=0.3)
-dQ_fast = fast_grad_Q(Q_copy, K_copy, V_copy, O.grad, epsilon=0.001, delta=0.3)
-
-dQ_relative_errors = []
+dQ_fast = fast_grad_Q_faster(Q_copy, K_copy, V_copy, O.grad, epsilon=0.005,delta=0.3)
+# dQ_fast = fast_grad_Q(Q_copy, K_copy, V_copy, O.grad, epsilon=0.001, delta=0.3)
 
 for i in range(N):
     for j in range(d):
         if Q.grad[i,j] > 0.01:
-            # print(f"i: {i}, j: {j}, dQ: {Q.grad[i,j]}, dQ_fast: {dQ_fast[i,j]}")
-            # print(f"Relative error: {torch.abs((Q.grad[i,j] - dQ_fast[i,j]) / Q.grad[i,j])}")
-            dQ_relative_errors.append(torch.abs((Q.grad[i,j] - dQ_fast[i,j]) / Q.grad[i,j]))
-
-print(f"dQ: Median relative error: {torch.median(torch.tensor(dQ_relative_errors)).item()*100}%")
+            print(f"i: {i}, j: {j}, dQ: {Q.grad[i,j]}, dQ_fast: {dQ_fast[i,j]}")
+            print(f"Relative error: {torch.abs((Q.grad[i,j] - dQ_fast[i,j]) / Q.grad[i,j])}")
+            # dQ_relative_errors.append(torch.abs((Q.grad[i,j] - dQ_fast[i,j]) / Q.grad[i,j]))
 
 # Print the mean absolute error with the manually implemented gradient.
 # print("dQ: Mean absolute error:", torch.mean(torch.abs(dQ - dQ_fast)).item())
