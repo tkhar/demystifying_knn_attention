@@ -17,7 +17,7 @@ d = 5
 # Input sequence length
 N = 20
 
-B = 4
+B = 5
 
 # Q,K,V matrices - input to self-attention
 # Their elements are drawn from a uniform distribution from -B to B.
@@ -73,19 +73,10 @@ loss.backward()
 #     print("Gradients of V are correct. Testing fast gradients.")
 
 # Approximate the gradient with respect to V:
-dV_fast = fast_grad_V(Q, K, V, O.grad, epsilon=0.01)
+dV_fast = fast_grad_V(Q, K, V, O.grad, epsilon=0.001)
 
-# Print the mean relative error. Don't calculate it where dV is 0 because the relative error is not defined.
-dV_relative_error = 0
-denom_v = 0
-for i in range(N):
-    for j in range(d):
-        if V.grad[i,j] > 0.01:
-            denom_v += 1
-            dV_relative_error += torch.abs((V.grad[i,j] - dV_fast[i,j]) / V.grad[i,j])
-
-dV_relative_error /= (denom_v)
-print(f"dV: Mean relative error: {dV_relative_error.item()*100}%")
+# Print the mean absolute error:
+print(f"dV: Mean absolute error: {torch.mean(torch.abs(dV_fast - V.grad)).item()}")
 
 # Calculate the gradient with respect to Q (naively)
 dQ = naive_backprop.grad_Q(Q, K, V, O.grad)
@@ -102,18 +93,12 @@ else:
 Q_copy = Q.clone().detach().requires_grad_(False)
 K_copy = K.clone().detach().requires_grad_(False)
 V_copy = V.clone().detach().requires_grad_(False)
-dQ_fast = fast_grad_Q_faster(Q_copy, K_copy, V_copy, O.grad, epsilon=0.005,delta=0.3)
+dQ_fast = fast_grad_Q_faster(Q_copy, K_copy, V_copy, O.grad, epsilon=0.1,delta=0.3)
 # dQ_fast = fast_grad_Q(Q_copy, K_copy, V_copy, O.grad, epsilon=0.001, delta=0.3)
 
-for i in range(N):
-    for j in range(d):
-        if Q.grad[i,j] > 0.01:
-            print(f"i: {i}, j: {j}, dQ: {Q.grad[i,j]}, dQ_fast: {dQ_fast[i,j]}")
-            print(f"Relative error: {torch.abs((Q.grad[i,j] - dQ_fast[i,j]) / Q.grad[i,j])}")
-            # dQ_relative_errors.append(torch.abs((Q.grad[i,j] - dQ_fast[i,j]) / Q.grad[i,j]))
+# Print the mean absolute error:
+print(f"dQ: Mean absolute error: {torch.mean(torch.abs(dQ_fast - dQ)).item()}")
 
-# Print the mean absolute error with the manually implemented gradient.
-# print("dQ: Mean absolute error:", torch.mean(torch.abs(dQ - dQ_fast)).item())
 
 # # Calculate the gradient with respect to K (naively)
 # dK = naive_backprop.grad_K(Q, K, V, O.grad)

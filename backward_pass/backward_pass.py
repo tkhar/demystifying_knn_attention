@@ -50,7 +50,6 @@ def fast_grad_Q(Q,K,V, dO, epsilon=0.2, delta=0.1):
             inputs_1 = (V, dO, i, j)
 
             E_1 = softmax_expectation_estimation(Q, K, i, F_1_func, inputs_1, S[i,:].tolist(), scores[i,:], epsilon=epsilon, delta=delta)
-            # print(f"E_1: {E_1}")
 
             def F_2_func(Q, K, V, dO, index, i, j):
                 return K[index, j]
@@ -58,7 +57,6 @@ def fast_grad_Q(Q,K,V, dO, epsilon=0.2, delta=0.1):
             inputs_2 = (None, None, None, j)
 
             E_2 = softmax_expectation_estimation(Q, K, i, F_2_func, inputs_2, S[i,:].tolist(), scores[i,:], epsilon=epsilon, delta=delta)
-            # print(f"E_2: {E_2}")
 
             def F_3_func(Q, K, V, dO, index, i, j=None):
                 return dO[i,:] @ V[index,:]
@@ -66,26 +64,9 @@ def fast_grad_Q(Q,K,V, dO, epsilon=0.2, delta=0.1):
             inputs_3 = (V, dO, i, None)
 
             E_3 = softmax_expectation_estimation(Q, K, i, F_3_func, inputs_3, S[i, :].tolist(), scores[i, :], epsilon=epsilon, delta=delta)
-            # print(f"E_3: {E_3}")
 
-            # print(f"E_1: {E_1}, E_2: {E_2}, E_3: {E_3}")
+            dQ[i,j] = torch.tensor(E_1.item() - (E_2.item() * E_3.item()), dtype=torch.float64)
 
-            E_1_true = 0
-            answer = 0
-            help = 0
-            for r in range(n):
-                E_1_true += P(Q,K,i,r) * K[r,j] * dP(dO,V,i,r)
-                help += P(Q,K,i,r) * K[r,j] * dPP(Q,K,V,dO,i)
-
-                answer += P(Q,K,i,r) * (dP(dO,V, i, r) - dPP(Q,K,V,dO,i)) * K[r,j]
-            
-            print(f"E_1 = {E_1.item()}. It should be close to {E_1_true}")
-            print(f"The relative error is {torch.abs(E_1.item() - E_1_true) / E_1_true}")
-
-            print(f"E_2 * E_3 = {E_2.item() * E_3.item()}. It should be close to {help}")
-            print(f"The relative error is {torch.abs(E_2.item() * E_3.item() - help) / help}")
-
-            dQ[i,j] = torch.tensor(E_1.item() - E_2.item() * E_3.item(), dtype=torch.float64)
 
     return dQ
 
@@ -110,10 +91,15 @@ def fast_grad_Q_faster(Q,K,V, dO, epsilon=0.2, delta=0.1):
     dQ = torch.zeros_like(Q)
 
     n, d = Q.shape
-    scores, S = topk(Q, K, int(math.sqrt(n)))
+    scores, S = topk(Q, K, 4 * int(math.sqrt(n)))
     scores = torch.tensor(scores, dtype=torch.float64)
 
+    print("Topk done.")
+
     for i in range(n):
+
+        if i % 10 == 0:
+            print(f"Processing row {i} out of {n}.")
 
         idx_sample = take_multiple_samples(Q, K, i, S[i,:].tolist(), scores[i,:], int(1/epsilon), int(np.log(1/delta)))
 
@@ -122,7 +108,7 @@ def fast_grad_Q_faster(Q,K,V, dO, epsilon=0.2, delta=0.1):
 
         inputs_3 = (V, dO, i, None)
 
-        E_3 = softmax_expectation_calculation_with_pre_samples(Q, K, F_3_func, inputs_3, idx_sample)
+        E_3 = softmax_expectation_estimation(Q, K, i, F_3_func, inputs_3, S[i, :].tolist(), scores[i, :], epsilon=epsilon, delta=delta)
 
         for j in range(d):
             def F_1_func(Q, K, V, dO, index, i, j):
@@ -131,7 +117,6 @@ def fast_grad_Q_faster(Q,K,V, dO, epsilon=0.2, delta=0.1):
             inputs_1 = (V, dO, i, j)
 
             E_1 = softmax_expectation_calculation_with_pre_samples(Q, K, F_1_func, inputs_1, idx_sample)
-            # print(f"E_1: {E_1}")
 
             def F_2_func(Q, K, V, dO, index, i, j):
                 return K[index, j]
@@ -139,36 +124,8 @@ def fast_grad_Q_faster(Q,K,V, dO, epsilon=0.2, delta=0.1):
             inputs_2 = (None, None, None, j)
 
             E_2 = softmax_expectation_calculation_with_pre_samples(Q, K, F_2_func, inputs_2, idx_sample)
-            # print(f"E_2: {E_2}")
 
-            # print(f"E_3: {E_3}")
-
-            # print(f"E_1: {E_1}, E_2: {E_2}, E_3: {E_3}")
-
-            E_1_true = 0
-            answer = 0
-            help = 0
-            for r in range(n):
-                E_1_true += P(Q,K,i,r) * K[r,j] * dP(dO,V,i,r)
-                help += P(Q,K,i,r) * K[r,j] * dPP(Q,K,V,dO,i)
-
-                answer += P(Q,K,i,r) * (dP(dO,V, i, r) - dPP(Q,K,V,dO,i)) * K[r,j]
-                
-            print(answer)
-            print(E_1_true - help)
-            
-            print(f"E_1 = {E_1.item()}. It should be close to {E_1_true}")
-            print(f"The relative error is {torch.abs(E_1.item() - E_1_true) / E_1_true}")
-
-            print(f"E_2 * E_3 = {E_2.item() * E_3.item()}. It should be close to {help}")
-            print(f"The relative error is {torch.abs(E_2.item() * E_3.item() - help) / help}")
-
-            dQ[i,j] = torch.tensor(E_1.item() - E_2.item() * E_3.item(), dtype=torch.float64)
-            print(f"dQ[{i},{j}] = {dQ[i,j]}")
-
-            if answer >= 1:
-                print("answer:", answer)
-                print("Relative error:", torch.abs(dQ[i,j] - answer) / answer)
+            dQ[i,j] = torch.tensor(E_1.item() - (E_2.item() * E_3.item()), dtype=torch.float64)
 
     return dQ
 
