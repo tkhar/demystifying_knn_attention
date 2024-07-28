@@ -9,7 +9,7 @@ def calculate_attention(Q, K, V, retain_grad=False):
     attention_scores = torch.matmul(Q, K.transpose(0, 1))
 
     # Normalize the attention scores by dividing by d.
-    attention_scores = attention_scores / d
+    attention_scores = attention_scores # / d **0.5
     
     # Apply softmax to get the attention weights
     attention_weights = torch.softmax(attention_scores, dim=-1)

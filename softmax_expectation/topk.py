@@ -26,6 +26,6 @@ def topk(Q, K, k):
     # Search for each query vector in Q in the index for
     # its k nearest neighbors.
     # This takes O(nk) time.
-    _, I = index.search(Q.numpy().astype('float32'), k)
+    scores, I = index.search(Q.numpy().astype('float32'), k)
 
-    return I
+    return scores, I

@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from naive_attention import naive_attention
 from naive_backprop import naive_backprop
-from backward_pass.backward_pass import fast_grad_V, fast_grad_Q, fast_grad_K
+from backward_pass.backward_pass import fast_grad_V, fast_grad_Q, fast_grad_K, fast_grad_Q_faster
 
 # This file will test the correctness of self-attention backprop implementation.
 # Suppose our loss is the mean squared error loss.
@@ -12,41 +12,50 @@ loss = nn.CrossEntropyLoss()
 vocab_size = 10
 
 # Embedding dimension
-d = 10
+d = 5
 
 # Input sequence length
-N = 1000
+N = 20
 
-mu = 20
-std = 10
+B = 4
 
 # Q,K,V matrices - input to self-attention
-Q = torch.randn(N, d, requires_grad=True) * std + mu
+# Their elements are drawn from a uniform distribution from -B to B.
+# To sample from a uniform distribution from -B to B, we can sample from a uniform distribution from 0 to 2B and subtract B.
+Q = torch.rand(N, d, requires_grad=True) * 2 * B - B
 Q.retain_grad()
-K = torch.randn(N, d, requires_grad=True) * std + mu
+K = torch.rand(N, d, requires_grad=True) * 2 * B - B
 K.retain_grad()
-V = torch.randn(N, d, requires_grad=True) * std + mu
+V = torch.rand(N, d, requires_grad=True) * 2 * B - B
 V.retain_grad()
+
 
 # Calculate naive attention
 O = naive_attention.calculate_attention(Q, K, V) # N x d
 O.retain_grad()
 
-# Create a linear layer
-W = torch.tensor(torch.randn(d, vocab_size), requires_grad=True) * std + mu
-W.retain_grad()
+# Have the linear layer be a constant matrix: d x vocab_size full of 1s
+# W = torch.ones(d, vocab_size, requires_grad=True)
+# W.retain_grad()
 
-L = O @ W # N x vocab_size
-L.retain_grad()
+# L = O @ W # N x vocab_size
+# L.retain_grad()
 
-# Calculate the loss. This is the average cross entropy loss for all N positions in the 
-# input sequence.
-T = torch.randint(0, vocab_size, (N,)) # N x 1
-loss = loss(L, T)
+# # Calculate the loss. This is the average cross entropy loss for all N positions in the 
+# # # input sequence.
+# T = torch.randint(0, vocab_size, (N,)) # N x 1
+# loss = loss(L, T)
+
+# Experiment 1) Our loss is the Frobenius norm of the O matrix.
+# loss = 10000 * torch.norm(O, p='fro') 
+
+# Experiment 2) Our loss is the sum of the cubes elements of the O matrix.
+loss = torch.sum(O ** 3)
+
 
 print(f"Loss = {loss.item()}")
 
-# Calculate the gradients of the loss w.r.t. W and O.
+# Calculate the gradients of the loss 
 loss.backward()
 
 # Sanity check: dO = dL * W.T
@@ -55,41 +64,57 @@ loss.backward()
 
 # Calculate the gradient with respect to V:
 # dV = naive_backprop.grad_V(Q, K, V, O.grad)
-# if torch.max(torch.abs(dV - V.grad)) > 0.01:
+
+# If the max relative error between dV and V.grad is greater than 0.01, then the gradients are not correct.
+# if torch.max(torch.abs(dV-V.grad) / torch.abs(V.grad)) > 0.01:
 #     print("Gradients of V are not correct.")
 #     print("Error is: ", torch.max(torch.abs(dV - V.grad)))
 # else:
-#     print("Gradients are correct. Testing fast gradients.")
+#     print("Gradients of V are correct. Testing fast gradients.")
 
 # Approximate the gradient with respect to V:
-dV_fast = fast_grad_V(Q, K, V, O.grad)
+dV_fast = fast_grad_V(Q, K, V, O.grad, epsilon=0.01)
 
-# Print the mean absolute error.
-print("dV: Mean absolute error:", torch.mean(torch.abs(V.grad - dV_fast)).item())
+# Print the mean relative error. Don't calculate it where dV is 0 because the relative error is not defined.
+dV_relative_error = 0
+denom_v = 0
+for i in range(N):
+    for j in range(d):
+        if V.grad[i,j] > 0.01:
+            denom_v += 1
+            dV_relative_error += torch.abs((V.grad[i,j] - dV_fast[i,j]) / V.grad[i,j])
+
+dV_relative_error /= (denom_v)
+print(f"dV: Mean relative error: {dV_relative_error.item()*100}%")
 
 # Calculate the gradient with respect to Q (naively)
-# dQ = naive_backprop.grad_Q(Q, K, V, O.grad)
+dQ = naive_backprop.grad_Q(Q, K, V, O.grad)
 
 # Calcuate the gradient with respect to Q (true)
-dQ_true = Q.grad
-# if torch.max(torch.abs(dQ - dQ_true)) > 0.01:
-#     print("Gradients of Q are not correct.")
-#     print("Error is: ", torch.max(torch.abs(dQ - dQ_true)))
-# else:
-#     print("Gradients are correct. Testing fast gradients.")
+if torch.max(torch.abs(dQ-Q.grad) / torch.abs(Q.grad)) > 0.01:
+    print("Gradients of Q are not correct.")
+    print("Error is: ", torch.max(torch.abs(dQ - Q.grad)))
+else:
+    print("Gradients of Q are correct. Testing fast gradients.")
 
 # Approximate the gradient with respect to Q.
 # First, clone the input matrices.
 Q_copy = Q.clone().detach().requires_grad_(False)
 K_copy = K.clone().detach().requires_grad_(False)
 V_copy = V.clone().detach().requires_grad_(False)
-dQ_fast = fast_grad_Q(Q_copy, K_copy, V_copy, O.grad, epsilon=1,delta=0.3)
+# dQ_fast = fast_grad_Q_faster(Q_copy, K_copy, V_copy, O.grad, epsilon=0.005,delta=0.3)
+dQ_fast = fast_grad_Q(Q_copy, K_copy, V_copy, O.grad, epsilon=0.001, delta=0.3)
 
-# Print the mean absolute error.
-print("dQ: Mean absolute error:", torch.mean(torch.abs(dQ_true - dQ_fast)).item())
+dQ_relative_errors = []
 
-print(dQ_true)
-print(V.grad)
+for i in range(N):
+    for j in range(d):
+        if Q.grad[i,j] > 0.01:
+            # print(f"i: {i}, j: {j}, dQ: {Q.grad[i,j]}, dQ_fast: {dQ_fast[i,j]}")
+            # print(f"Relative error: {torch.abs((Q.grad[i,j] - dQ_fast[i,j]) / Q.grad[i,j])}")
+            dQ_relative_errors.append(torch.abs((Q.grad[i,j] - dQ_fast[i,j]) / Q.grad[i,j]))
+
+print(f"dQ: Median relative error: {torch.median(torch.tensor(dQ_relative_errors)).item()*100}%")
 
 # Print the mean absolute error with the manually implemented gradient.
 # print("dQ: Mean absolute error:", torch.mean(torch.abs(dQ - dQ_fast)).item())

@@ -27,5 +27,9 @@ This is documentation for the Fast Sampling Attention project. Major files inclu
 ## TODOs
 1. ~~Improve the naive gradients so that they are more efficient.~~
 2. ~~Optimize the implementation of the fast algorithms.~~
-3. Do a lot of validation testing to check the quality of the approximations.
-4. Test other loss functions so that gradients are larger!
+3. ~~Do a lot of validation testing to check the quality of the approximations.~~
+4. ~~Test other loss functions so that gradients are larger!~~
+5. ~~Ensure that the gradient formulas are correct in the naive setting.~~
+6. Check if we can optimize the fast gradients by re-using samples. This typically leads to higher error but maybe we can fix it.
+7. Study the error in approximation of the gradient by studying quantiles of relative error!
+8. Study the absolute error perhaps?
