@@ -41,8 +41,11 @@ for _ in range(100):
 # This is the expected value of the sampled index.
 # Analytically, we just have to evaluate the inner product of (Q[0] @ K[j]^T)_{j=1}^n * f.
 
+def f(Q, K, V, dO, index, ii, jj):
+    return index
+
 expectation_true = torch.sum(distribution * torch.arange(N))
-expectation_sampled = softmax_expectation_estimation(Q, K, 0, torch.arange(N), S_i[0,:].tolist(), epsilon=0.01, delta=0.05)
+expectation_sampled = softmax_expectation_estimation(Q, K, 0, f, None, S_i[0,:].tolist(), epsilon=0.01, delta=0.05)
 
 print(f"True expectation: {expectation_true}")
 print(f"Sampled expectation: {expectation_sampled}")

@@ -36,9 +36,9 @@ def P(Q, K, i,j):
 
 def dPP(Q,K,V,dO,i):
     n,d = Q.shape
-    ip = 0
-    for k in range(n):
-        ip += dP(dO, V, i, k) * P(Q,K,i,k)
+    ip1 = torch.tensor([dP(dO,V,i,k) for k in range(n)])
+    ip2 = torch.tensor([P(Q,K,i,k) for k in range(n)])
+    ip = ip1 @ ip2
     
     return ip
 

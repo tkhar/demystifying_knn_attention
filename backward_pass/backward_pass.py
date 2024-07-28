@@ -34,32 +34,41 @@ def fast_grad_V(Q, K, V, dO,e=1e-1):
 
     return dV
 
-def fast_grad_Q(Q,K,V, dO, epsilon=0.05, delta=0.1):
+def fast_grad_Q(Q,K,V, dO, epsilon=0.2, delta=0.1):
     dQ = torch.zeros_like(Q)
 
     n, d = Q.shape
     S = topk(Q, K, int(math.sqrt(n)))
 
     for i in range(n):
+        if i % 100 == 0:
+            print(f"i: {i}")
         for j in range(d):
-            F_1 = torch.tensor([0] * n, dtype=torch.float64)
-            for k in range(n):
-                F_1[k] = K[k,j] * (dO[i,:] @ V[k,:])
+            def F_1_func(Q, K, V, dO, index, i, j):
+                return K[index,j] * (dO[i,:] @ V[index,:])
+            
+            inputs_1 = (V, dO, i, j)
 
-            E_1 = softmax_expectation_estimation(Q, K, i, F_1, S[i,:], epsilon=epsilon, delta=delta)
+            E_1 = softmax_expectation_estimation(Q, K, i, F_1_func, inputs_1, S[i,:], epsilon=epsilon, delta=delta)
             # print(f"E_1: {E_1}")
 
-            E_2 = softmax_expectation_estimation(Q, K, i, K[:,j], S[i,:], epsilon=epsilon, delta=delta)
+            def F_2_func(Q, K, V, dO, index, i, j):
+                return K[index, j]
+            
+            inputs_2 = (None, None, None, j)
+
+            E_2 = softmax_expectation_estimation(Q, K, i, F_2_func, inputs_2, S[i,:], epsilon=epsilon, delta=delta)
             # print(f"E_2: {E_2}")
 
-            F_3 = torch.tensor([0] * n, dtype=torch.float64)
-            for k in range(n):
-                F_3[k] += (dO[i,:] @ V[k,:])
+            def F_3_func(Q, K, V, dO, index, i, j=None):
+                return dO[i,:] @ V[index,:]
 
-            E_3 = softmax_expectation_estimation(Q, K, i, F_3, S[i, :], epsilon=epsilon, delta=delta)
+            inputs_3 = (V, dO, i, None)
+
+            E_3 = softmax_expectation_estimation(Q, K, i, F_3_func, inputs_3, S[i, :], epsilon=epsilon, delta=delta)
             # print(f"E_3: {E_3}")
 
-            dQ[i,j] = E_1 - E_2 * E_3
+            dQ[i,j] = torch.tensor(E_1 - E_2 * E_3)
 
     return dQ
 

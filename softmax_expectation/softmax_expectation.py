@@ -78,13 +78,19 @@ def softmax_sample(Q, K, i, S_i):
 # - K: A matrix of shape n x d -> This is the key matrix.
 # - i: The index of the row of Q to sample from.
 # - f: A function that takes an index j and returns a scalar.
+# - inputs: The parameters of the function f. They'll always contain V,dO
 # - S_i: The top sqrt(n) indices j of Q[i] @ K[j]^T.
 # 
 # Output:
 # - The expectation of f with respect to the softmax distribution.   
-def softmax_expectation_estimation(Q, K, i, f, S_i, epsilon=0.1, delta=0.1):
+def softmax_expectation_estimation(Q, K, i, f, inputs, S_i, epsilon=0.1, delta=0.1):
     n = Q.shape[0]
     k = len(S_i)
+    
+    if inputs is not None:
+        V, dO, ii, jj = inputs
+    else:
+        V, dO, ii, jj = None, None, None, None
 
     # We will use a median-of-means approach to estimate the expectation.
     # In this approach, we repeat the following process O(log(1/delta)) times:
@@ -98,7 +104,7 @@ def softmax_expectation_estimation(Q, K, i, f, S_i, epsilon=0.1, delta=0.1):
         samples = []
         for _ in range(int(1/(epsilon**2))):
             index = softmax_sample(Q, K, i, S_i)
-            samples.append(f[index])
+            samples.append(f(Q,K,V,dO,index, ii, jj))
         expectations.append(np.mean(samples))
 
     return np.median(expectations)
