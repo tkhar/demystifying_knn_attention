@@ -12,7 +12,7 @@ import faiss
 # Output:
 #   - The top k indices of Q[i] @ K[j]^T.
 def topk(Q, K, k):
-    n,d = K.shape
+    n, d = Q.shape
     # We will use the Faiss library to perform the clustering.
 
     # Build a FAISS Flat index:

@@ -115,7 +115,7 @@ def softmax_expectation_estimation(Q, K, i, f, inputs, S_i, S_i_scores, epsilon=
     # This gives us an estimate of the expectation.
 
     expectations = []
-    for _ in range(int(np.log(1/delta))):
+    for _ in range(max(3,int(np.log(1/delta)))):
         samples = []
         for _ in range(int(1/(epsilon))):
             index = softmax_sample(Q, K, i, S_i, S_i_scores)
@@ -123,6 +123,55 @@ def softmax_expectation_estimation(Q, K, i, f, inputs, S_i, S_i_scores, epsilon=
         expectations.append(np.mean(samples))
 
     return np.median(expectations)
+
+# 
+# Calculate the expectation of f with respect to the softmax distribution.
+# 
+# Input:
+# - Q: A matrix of shape n x d -> This is the query matrix.
+# - K: A matrix of shape n x d -> This is the key matrix.
+# - i: The index of the row of Q to sample from.
+# - f: A function that takes an index j and returns a scalar.
+# - inputs: The parameters of the function f. They'll always contain V,dO
+# - S_i: The top sqrt(n) indices j of Q[i] @ K[j]^T.
+# - S_i_scores: The scores of the top sqrt(n) indices j of Q[i] @ K[j]^T.
+# 
+# Output:
+# - The expectation of f with respect to the softmax distribution.   
+def softmax_expectation_estimation_faster(Q, K, i, \
+                                          f, \
+                                          inputs, \
+                                          S_i, \
+                                          S_i_scores, \
+                                          denom, \
+                                          epsilon=0.1, delta=0.1,\
+                                          MM=20):
+    n = Q.shape[0]
+    k = len(S_i)
+    
+    if inputs is not None:
+        V, dO, ii, jj = inputs
+    else:
+        V, dO, ii, jj = None, None, None, None
+
+    numerator = 0
+    for score in S_i_scores:
+        numerator += (np.exp(score - MM) * f(Q, K, V, dO, S_i[0], ii, jj))
+
+    # Sample l uniformly at random from [n] - S_i.
+    # samples = []
+    # l = 1
+    # while len(samples) < l:
+    #     index = np.random.randint(n)
+    #     if index not in S_i:
+    #         samples.append(index)
+
+    # for index in samples:
+    #     ip = Q[i] @ K[index]
+    #     numerator += (np.exp(ip) * f(Q, K, V, dO, index, ii, jj))
+    #     denom += np.exp(ip)
+
+    return numerator / denom
 
 def softmax_expectation_calculation_with_pre_samples(Q, K, f, inputs, pre_samples):    
     if inputs is not None:
