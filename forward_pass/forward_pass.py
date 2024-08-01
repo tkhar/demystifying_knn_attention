@@ -14,7 +14,7 @@ def attn_forward(Q, K, V, epsilon=0.01, delta=0.01):
     d = V.shape[1]
 
     # Calculate the top sqrt(n) indices of Q[i] @ K[j]^T.
-    k = int(n ** 0.5)
+    k = 0.75 * n # int(n ** 0.5)
     scores, S = topk(Q, K, k)
 
     S = torch.tensor(S, dtype=torch.int64)
@@ -63,7 +63,7 @@ def attn_forward_batched(Q, K, V, epsilon=0.01, delta=0.01):
         
     B,H,N,D = Q.shape
 
-    k = 2 # int(N ** 0.5)
+    k = int(N ** 0.5)
 
     # For each batch and head, 
     # Calculate the top sqrt(n) indices of Q[i] @ K[j]^T for all i.
@@ -83,8 +83,18 @@ def attn_forward_batched(Q, K, V, epsilon=0.01, delta=0.01):
     # Warning 2: This code is not easy to debug.
 
     # Initialize the output tensor.
+
+    # We'll create a mask for attention to attend only to the left of the current position.
+    indices = torch.arange(N)[:, None].expand(N, k)
+    indices = indices[None, None, :, :].expand(B, H, N, k)
+    mask = (S > indices)
+    S[mask] = N
+    # Add a row of zeros to V for every batch and head.
     # Compute the denominator for all b, h, i at once
-    denom = torch.sum(torch.exp(scores - 20), dim=-1, keepdim=True)
+    ones_denom = torch.ones_like(V)
+    V = torch.cat((V, torch.zeros(B,H,1,D, dtype=V.dtype)), dim=2)
+    ones_denom = torch.cat((ones_denom, torch.zeros(B,H,1,D, dtype=ones_denom.dtype)), dim=2)
+    S = torch.cat((S, N * torch.ones(B,H,1,k, dtype=S.dtype)), dim=2)
 
     scores = scores.unsqueeze(3) # B x H x N x 1 x k
     scores = torch.exp(scores - 20) # B x H x N x 1 x k
@@ -94,13 +104,26 @@ def attn_forward_batched(Q, K, V, epsilon=0.01, delta=0.01):
     BB = torch.arange(V.size(0)).view(-1, 1, 1, 1).expand(-1, V.size(1), V.size(2), -1)
     HH = torch.arange(V.size(1)).view(1, -1, 1, 1).expand(-1, V.size(1), V.size(2), -1)
 
-    V_selected = V[BB, HH, S] # B x H x N x k x D
-    V_selected_3d = V_selected.view(-1, k, D)
+    # Now we want to select k rows from V for each b, h, i according to S[b,h,i]
+    V_selected = V[BB,HH,S]
+    V_selected = V_selected[:, :, :-1, :] # Remove the row of zeros we added earlier
+    V_selected_3d = V_selected.reshape(-1, k, D)
 
     numerator = torch.bmm(scores_3d, V_selected_3d)
     numerator = numerator.view(B, H, N, D)
 
-    return numerator / denom
+    ones_denom_selected = ones_denom[BB,HH,S]
+    ones_denom_selected = ones_denom_selected[:, :, :-1, :] # Remove the row of zeros we added earlier
+    ones_denom_selected = ones_denom_selected.reshape(-1, k, D)
+    denom = torch.bmm(scores_3d, ones_denom_selected)
+    denom = denom.view(B, H, N, D)
+
+    output = numerator / denom
+
+    # Replace NaNs with zeros
+    output[torch.isnan(output)] = 0
+
+    return output
 
 
     # -- UNVECTORIZED CODE -- Go get a coffee while you wait for the results -- #

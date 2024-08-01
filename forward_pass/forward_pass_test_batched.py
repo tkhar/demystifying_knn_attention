@@ -4,7 +4,6 @@ from naive_attention.naive_attention import calculate_attention_batched
 from forward_pass.forward_pass import attn_forward_batched
 import time
 
-
 def run_experiment(Q, K, V):
 
     # Call the naive_attention function.

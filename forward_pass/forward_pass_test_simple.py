@@ -12,7 +12,7 @@ def run_experiment(Q, K, V, n, d):
     # Call the attn_forward function.
     attn_output = attn_forward(Q, K, V)
 
-    return torch.mean(torch.abs(naive_output - attn_output))
+    return torch.max(torch.abs(naive_output - attn_output))
 
 torch.manual_seed(0)
 n, d = 200, 2
@@ -35,4 +35,4 @@ estimate = 0
 for i in range(num_iterations):
     estimate += run_experiment(Q, K, V, n, d)
 
-print("Mean error = ", estimate / num_iterations)
+print("Mean max error = ", estimate / num_iterations)
