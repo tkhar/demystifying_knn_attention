@@ -146,17 +146,13 @@ def softmax_expectation_estimation_faster(Q, K, i, \
                                           denom, \
                                           epsilon=0.1, delta=0.1,\
                                           MM=20):
-    n = Q.shape[0]
-    k = len(S_i)
-    
     if inputs is not None:
         V, dO, ii, jj = inputs
     else:
         V, dO, ii, jj = None, None, None, None
 
-    numerator = 0
-    for score in S_i_scores:
-        numerator += (np.exp(score - MM) * f(Q, K, V, dO, S_i[0], ii, jj))
+    numerator = torch.inner(np.exp(torch.tensor(S_i_scores) - MM),\
+                            torch.tensor([f(Q, K, V, dO, S_i[s], ii, jj) for s in range(len(S_i))]))
 
     # Sample l uniformly at random from [n] - S_i.
     # samples = []

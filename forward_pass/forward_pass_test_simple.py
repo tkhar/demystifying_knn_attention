@@ -8,17 +8,15 @@ def run_experiment(Q, K, V, n, d):
 
     # Call the naive_attention function.
     naive_output = calculate_attention(Q, K, V)
-    # print(naive_output)
 
     # Call the attn_forward function.
     attn_output = attn_forward(Q, K, V)
-    # print(attn_output)
 
-    return torch.max(torch.abs(naive_output - attn_output))
+    return torch.mean(torch.abs(naive_output - attn_output))
 
 torch.manual_seed(0)
-n, d = 100, 50
-B = 100
+n, d = 200, 2
+B = 1
 
 # Generate n x d random matrices with entries in [-B,B].
 # These are real numbers.
@@ -37,4 +35,4 @@ estimate = 0
 for i in range(num_iterations):
     estimate += run_experiment(Q, K, V, n, d)
 
-print("Max error = ", estimate / num_iterations)
+print("Mean error = ", estimate / num_iterations)
