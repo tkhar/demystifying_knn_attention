@@ -3,8 +3,11 @@ import numpy as np
 from naive_attention.naive_attention import calculate_attention_batched
 from forward_pass.forward_pass import attn_forward_batched
 import time
+import tracemalloc
+import math
+import matplotlib.pyplot as plt
 
-def run_experiment(Q, K, V):
+def run_experiment(Q, K, V, k=2):
 
     # Call the naive_attention function.
     start_time = time.time()
@@ -14,33 +17,61 @@ def run_experiment(Q, K, V):
 
     # Call the attn_forward function.
     start_time = time.time()
-    attn_output = attn_forward_batched(Q, K, V)
+    attn_output = attn_forward_batched(Q, K, V, k=k)
     print("Attn time = ", time.time() - start_time)
     # print(attn_output)
 
     return torch.mean(torch.abs(naive_output - attn_output))
 
 torch.manual_seed(0)
-b = 2
-h = 6
-n, d = 64, 32
-B = 2
+b = 1
+h = 10
+n, d = 1000, 32
 
-# Generate b x h n x d random matrices with entries in [-B,B].
-# These are real numbers.
-Q = torch.rand(b, h, n, d, requires_grad=False) * 2 * B - B
-K = torch.rand(b, h, n, d, requires_grad=False) * 2 * B - B
-V = torch.rand(b, h, n, d, requires_grad=False) * 2 * B - B
+# Range k.
+kk = [int(n ** 0.5), int(n ** 0.25), int(n ** 0.125), int(math.log(n)), 2]
+kk = sorted(list(set(kk)))
+kk = kk[::-1]
 
-# Cast to float32
-Q = Q.float()
-K = K.float()
-V = V.float()
+# Range B.
+BB = [2, 2.5, 3, 3.5, 4]
+colors = ['b', 'g', 'r', 'c', 'm']
 
-num_iterations = 1
+for i, B in enumerate(BB):
+    means = []
+    std_devs = []
+    for k in kk:
+        # Generate b x h n x d random matrices with entries in [-B,B].
+        # These are real numbers.
+        Q = torch.rand(b, h, n, d, requires_grad=False) * 2 * B - B
+        K = torch.rand(b, h, n, d, requires_grad=False) * 2 * B - B
+        V = torch.rand(b, h, n, d, requires_grad=False) * 2 * B - B
 
-estimate = 0
-for i in range(num_iterations):
-    estimate += run_experiment(Q, K, V)
+        # Cast to float32
+        Q = Q.float()
+        K = K.float()
+        V = V.float()
 
-print("Mean error = ", estimate / num_iterations)
+        print("Q shape = ", Q.shape)
+
+        num_iterations = 10
+        
+        results_k = [run_experiment(Q, K, V, k=k) for _ in range(num_iterations)]
+        means.append(torch.mean(torch.tensor(results_k)))
+        print("k = ", k, " mean = ", means[-1])
+        std_devs.append(torch.std(torch.tensor(results_k)))
+        print("k = ", k, " std_dev = ", std_devs[-1])
+
+    means = np.array(means)
+    # std_devs = np.array(std_devs)
+
+    plt.plot(kk, means, 'b-o', color=colors[i], label=f"Mean error, B={B}")
+    # plt.fill_between(kk, means - std_devs, means + std_devs, color='b', alpha=0.2)
+
+plt.title("Mean error vs. k")
+plt.xlabel("k")
+plt.ylabel("Mean error")
+plt.legend()
+
+
+plt.show()

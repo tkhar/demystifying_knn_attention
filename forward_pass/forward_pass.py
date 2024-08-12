@@ -2,6 +2,7 @@ import torch
 from softmax_expectation.softmax_expectation import softmax_expectation_estimation_faster
 from softmax_expectation.topk import topk
 import numpy as np
+import math
 
 # This function calculates the attention mechanism in the forward pass.
 # It uses the softmax expectation approximation method.
@@ -59,11 +60,14 @@ def attn_forward(Q, K, V, epsilon=0.01, delta=0.01):
 #
 # Outputs:
 # - A tensor of shape (b,h,n,d) containing the output vectors.
-def attn_forward_batched(Q, K, V, epsilon=0.01, delta=0.01):
+def attn_forward_batched(Q, K, V, k, epsilon=0.01, delta=0.01):
         
     B,H,N,D = Q.shape
 
-    k = int(N ** 0.5)
+    # This should be the maximum value of q^T @ k for all q, k.
+    # We use this to avoid numerical issues with the exponential function.
+    # It is hard-coded to a constant for now.
+    M = 100
 
     # For each batch and head, 
     # Calculate the top sqrt(n) indices of Q[i] @ K[j]^T for all i.
@@ -97,7 +101,7 @@ def attn_forward_batched(Q, K, V, epsilon=0.01, delta=0.01):
     S = torch.cat((S, N * torch.ones(B,H,1,k, dtype=S.dtype)), dim=2)
 
     scores = scores.unsqueeze(3) # B x H x N x 1 x k
-    scores = torch.exp(scores - 20) # B x H x N x 1 x k
+    scores = torch.exp(scores - M) # B x H x N x 1 x k
     scores_3d = scores.view(-1, 1, k) # BH x N x 1 x k
 
     # Good luck figuring out what this does... 

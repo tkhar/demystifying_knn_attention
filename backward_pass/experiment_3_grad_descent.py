@@ -14,10 +14,10 @@ import os
 def experiment():
 
     # Embedding dimension
-    d = 3
+    d = 64
 
     # Input sequence length
-    N = 10000
+    N = 1000
 
     # Q,K,V matrices - input to self-attention
     Q = torch.randn(N, d, requires_grad=True)
@@ -38,9 +38,6 @@ def experiment():
     dv_average_time = 0
     dQ_average_time = 0
     autograd_average_time = 0
-
-    autograd_mem = 0
-    fast_mem = 0
 
     while iteration != num_iterations:
         iteration += 1
@@ -63,14 +60,9 @@ def experiment():
         # Calculate the gradients of the loss 
 
         ## -- BACKWARD PASS -- ##
-        process = psutil.Process(os.getpid())
-        memory_before = process.memory_info()
         start_time = time.time()
         loss.backward(retain_graph=True)
         autograd_average_time += time.time() - start_time
-
-        memory_after = process.memory_info()
-        autograd_mem += (memory_after.rss - memory_before.rss)
 
         loss_fast.backward(retain_graph=True)
 
@@ -79,9 +71,8 @@ def experiment():
         # Approximate the gradient with respect to V:
         time_start = time.time()
 
-        dV_fast, mem_dV = fast_grad_V(Q_copy_fast, K_copy_fast, V_copy_fast, O_fast.grad, epsilon=0.1)
+        dV_fast = fast_grad_V(Q_copy_fast, K_copy_fast, V_copy_fast, O_fast.grad, epsilon=0.2)
         dv_average_time += time.time() - time_start
-        fast_mem += mem_dV
 
         # Print the mean absolute error:
         # print(f"dV: Mean absolute error: {torch.mean(torch.abs(dV_fast - V.grad)).item()}")
@@ -93,9 +84,8 @@ def experiment():
         V_copy = V.clone().detach().requires_grad_(False)
 
         time_start = time.time()
-        dQ_fast, mem_dQ = fast_grad_Q(Q_copy, K_copy, V_copy, O.grad, epsilon=0.1, delta=0.5)
+        dQ_fast = fast_grad_Q(Q_copy, K_copy, V_copy, O.grad, epsilon=0.1, delta=0.5)
         dQ_average_time += time.time() - time_start
-        fast_mem += mem_dQ
 
         # Print the mean absolute error:
         # print(f"dQ: Mean absolute error: {torch.mean(torch.abs(dQ_fast - Q.grad)).item()}")
@@ -113,9 +103,6 @@ def experiment():
     print(f"Average time for dV: {dv_average_time / num_iterations}")
     print(f"Average time for dQ: {dQ_average_time / num_iterations}")
     print(f"Average time for autograd: {autograd_average_time / num_iterations}")
-
-    print(f"Average memory used for dV and dQ: {fast_mem / num_iterations}")
-    print(f"Average memory used for autograd: {autograd_mem / num_iterations}")
 
     # Plot the loss and the loss from the fast gradients
     plt.plot(losses_fast)

@@ -1,13 +1,13 @@
 import torch
 import numpy as np
-from naive_attention.naive_attention import calculate_attention
+from naive_attention import naive_attention
 from forward_pass.forward_pass import attn_forward
 
 
 def run_experiment(Q, K, V, n, d):
 
     # Call the naive_attention function.
-    naive_output = calculate_attention(Q, K, V)
+    naive_output = naive_attention.calculate_attention(Q, K, V)
 
     # Call the attn_forward function.
     attn_output = attn_forward(Q, K, V)

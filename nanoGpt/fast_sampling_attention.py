@@ -21,7 +21,8 @@ def topk(Q, K, k):
     # Build a FAISS Flat index:
     index = faiss.IndexFlatIP(d)
 
-    K_normalized = K.clone()
+    K_normalized = K.clone().detach().requires_grad_(False)
+    Q_clone = Q.clone().detach().requires_grad_(False)
 
     # Add the normalized key vectors to the index
     index.add(K_normalized.numpy().astype('float32'))
@@ -29,7 +30,7 @@ def topk(Q, K, k):
     # Search for each query vector in Q in the index for
     # its k nearest neighbors.
     # This takes O(nk) time.
-    scores, I = index.search(Q.numpy().astype('float32'), k)
+    scores, I = index.search(Q_clone.numpy().astype('float32'), k)
 
     return scores, I
 
@@ -49,7 +50,7 @@ def attn_forward_batched(Q, K, V, epsilon=0.01, delta=0.01):
             
     B,H,N,D = Q.shape
 
-    k = 2 * int(N ** 0.5)
+    k = 3 * int(N ** 0.5)
 
     # For each batch and head, 
     # Calculate the top sqrt(n) indices of Q[i] @ K[j]^T for all i.

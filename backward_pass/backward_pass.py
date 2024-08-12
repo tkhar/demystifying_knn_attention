@@ -29,9 +29,6 @@ import psutil
 #   - Sample from the softmax distribution in O(sqrt(N)) time using the Gumbel-Max trick.
 #
 def fast_grad_V(Q, K, V, dO,epsilon=0.01):
-    process = psutil.Process(os.getpid())
-    memory_before = process.memory_info()
-
     dV = torch.zeros_like(V)
 
     # For each column vector of dO, calculate P^T dO:
@@ -39,15 +36,9 @@ def fast_grad_V(Q, K, V, dO,epsilon=0.01):
         estimated_dV_j = approximate_product(Q, K, dO[:,j], num_samples=math.ceil(Q.shape[1] * math.log(Q.shape[0]) / epsilon))
         dV[:,j] = estimated_dV_j
 
-    memory_after = process.memory_info()
-    print(f"dV: Memory used: {memory_after.rss - memory_before.rss}")
-
-    return dV, memory_after.rss - memory_before.rss
+    return dV
 
 def fast_grad_Q(Q,K,V, dO, epsilon=0.2, delta=0.1):
-    process = psutil.Process(os.getpid())
-    memory_before = process.memory_info()
-
     dQ = torch.zeros_like(Q)
 
     n, d = Q.shape
@@ -111,10 +102,7 @@ def fast_grad_Q(Q,K,V, dO, epsilon=0.2, delta=0.1):
 
             dQ[i,j] = torch.tensor(E_1.item() - (E_2.item() * E_3.item()), dtype=torch.float64)
 
-    memory_after = process.memory_info()
-    print(f"dQ: Memory used: {memory_after.rss - memory_before.rss}")
-
-    return dQ, memory_after.rss - memory_before.rss
+    return dQ
 
 def fast_grad_K(Q,K,V, dO, epsilon=0.05, delta=0.1):
     dK = torch.zeros_like(K)

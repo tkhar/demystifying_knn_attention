@@ -8,10 +8,6 @@ def calculate_attention(Q, K, V, retain_grad=False):
     # Calculate the dot product of Q and K
     attention_scores = torch.matmul(Q, K.transpose(0, 1))
 
-    # Mask the attention scores
-    mask = torch.tril(torch.ones(n, n), diagonal=-1)
-    attention_scores = attention_scores.masked_fill(mask == 0, float('-inf'))
-
     # Normalize the attention scores by dividing by d.
     attention_scores = attention_scores # / d **0.5
     

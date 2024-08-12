@@ -26,6 +26,32 @@ class LayerNorm(nn.Module):
 
     def forward(self, input):
         return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
+    
+class Attention(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, q, k, v, bias, attn_dropout):
+        ctx.save_for_backward(q, k, v)
+        T = q.size(-2)
+        att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+        att = att.masked_fill(bias[:,:,:T,:T] == 0, float('-inf'))
+        att = F.softmax(att, dim=-1)
+        att = attn_dropout(att)
+        y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+        return y
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        q, k, v = ctx.saved_tensors
+        P = F.softmax((q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1))), dim=-1)
+        grad_v = P.transpose(-2, -1) @ grad_output
+
+        grad_p = grad_output @ v.transpose(-2, -1)
+        grad_S = P * grad_p - P * (torch.sum(P * grad_p, dim=-1, keepdim=True).repeat(1, 1, 1, P.size(-1)))
+
+        grad_q = grad_S @ k
+        grad_k = grad_S.transpose(-2, -1) @ q
+        
+        return grad_q, grad_k, grad_v, None, None
 
 class CausalSelfAttention(nn.Module):
 
@@ -65,13 +91,9 @@ class CausalSelfAttention(nn.Module):
             y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
         else:
             # manual implementation of attention
-            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-            att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
-            att = F.softmax(att, dim=-1)
-            att = self.attn_dropout(att)
-            y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
-            y_prime = attn_forward_batched(q, k, v)
-            y = y_prime
+            y = Attention.apply(q, k, v, self.bias, self.attn_dropout)
+            # y_prime = attn_forward_batched(q, k, v)
+            # y = y_prime
 
         y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
 
