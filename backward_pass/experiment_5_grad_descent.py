@@ -5,19 +5,21 @@ import torch
 from torch import nn
 from naive_attention import naive_attention
 from naive_backprop import naive_backprop
-from backward_pass.backward_pass import fast_grad_V, fast_grad_Q, fast_grad_K, fast_grad_Q_faster
+from backward_pass.backward_pass import fast_grad_V, fast_grad_Q, fast_grad_K
 import matplotlib.pyplot as plt
 
 # Embedding dimension
 d = 6
 
 # Input sequence length
-N = 30
+N = 1000
+
+lr = 0.1
 
 # Q,K,V matrices - input to self-attention
-Q = torch.randn(N, d, requires_grad=True, dtype=torch.float64)
-K = torch.randn(N, d, requires_grad=True, dtype=torch.float64) 
-V = torch.randn(N, d, requires_grad=True, dtype=torch.float64)
+Q = torch.randn(N, d, requires_grad=True)
+K = torch.randn(N, d, requires_grad=True) 
+V = torch.randn(N, d, requires_grad=True)
 
 Q_copy_fast = Q.clone().detach().requires_grad_(True)
 K_copy_fast = K.clone().detach().requires_grad_(True)
@@ -30,7 +32,7 @@ criterion = nn.CrossEntropyLoss()
 # We'll compare the descent with the gradients calculated using our method, vs
 # the gradients calculated using the naive method.
 iteration = 0
-num_iterations = 30
+num_iterations = 200
 losses_fast = []
 losses = []
 while iteration != num_iterations:
@@ -56,7 +58,7 @@ while iteration != num_iterations:
     loss_fast.backward(retain_graph=True)
 
     # Approximate the gradient with respect to V:
-    dV_fast = fast_grad_V(Q_copy_fast, K_copy_fast, V_copy_fast, O_fast.grad, epsilon=0.01)
+    dV_fast = fast_grad_V(Q_copy_fast, K_copy_fast, V_copy_fast, O_fast.grad, epsilon=0.1)
 
     # Print the mean absolute error:
     # print(f"dV: Mean absolute error: {torch.mean(torch.abs(dV_fast - V.grad)).item()}")
@@ -66,21 +68,20 @@ while iteration != num_iterations:
     Q_copy = Q.clone().detach().requires_grad_(False)
     K_copy = K.clone().detach().requires_grad_(False)
     V_copy = V.clone().detach().requires_grad_(False)
-    # dQ_fast = fast_grad_Q(Q_copy, K_copy, V_copy, O.grad, epsilon=0.1, delta=0.5)
-    dQ_fast = fast_grad_Q_faster(Q_copy, K_copy, V_copy, O.grad, epsilon=0.1, delta=0.5)
+    dQ_fast = fast_grad_Q(Q_copy, K_copy, V_copy, O.grad, epsilon=0.1, delta=0.5)
 
     # Print the mean absolute error:
     # print(f"dQ: Mean absolute error: {torch.mean(torch.abs(dQ_fast - Q.grad)).item()}")
 
     # Update the Q, V matrices
     with torch.no_grad():
-        Q -= 0.05 * Q.grad
-        V -= 0.05 * V.grad
+        Q -= lr * Q.grad
+        V -= lr * V.grad
         Q.grad.zero_()
         V.grad.zero_()
 
-        Q_copy_fast -= 0.05 * dQ_fast
-        V_copy_fast -= 0.05 * dV_fast
+        Q_copy_fast -= lr * dQ_fast
+        V_copy_fast -= lr * dV_fast
 
 # Plot the loss and the loss from the fast gradients
 plt.plot(losses_fast)
@@ -88,5 +89,5 @@ plt.plot(losses)
 plt.legend(['Fast gradients', 'Naive gradients'])
 plt.xlabel('Iteration')
 plt.ylabel('Loss')
-plt.title('Loss non-convex: Cross entropy loss')
+plt.title('Loss: Cross entropy loss')
 plt.show()

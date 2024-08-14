@@ -29,9 +29,13 @@ h = 10
 n, d = 1000, 32
 
 # Range k.
-kk = [int(n ** 0.5), int(n ** 0.25), int(n ** 0.125), int(math.log(n)), 2]
+kk = [int(n ** 0.5), int(n ** 0.25), int(n ** 0.125), int(math.log(n)), 3]
 kk = sorted(list(set(kk)))
-kk = kk[::-1]
+kk_labels = [r"2", r"$\log(n)$", r"$n^{1/8}$", r"$n^{1/4}$", r"$n^{1/2}$"]
+if len(kk_labels) != len(kk):
+    print(kk)
+    print(kk_labels)
+    raise ValueError("kk_labels and kk must have the same length.")
 
 # Range B.
 BB = [2, 2.5, 3, 3.5, 4]
@@ -63,13 +67,13 @@ for i, B in enumerate(BB):
         print("k = ", k, " std_dev = ", std_devs[-1])
 
     means = np.array(means)
-    # std_devs = np.array(std_devs)
+    std_devs = np.array(std_devs)
 
-    plt.plot(kk, means, 'b-o', color=colors[i], label=f"Mean error, B={B}")
-    # plt.fill_between(kk, means - std_devs, means + std_devs, color='b', alpha=0.2)
+    plt.plot(kk_labels, means, 'b-o', color=colors[i], label=f"B={B}")
+    plt.fill_between(kk_labels, means - std_devs, means + std_devs, color='b', alpha=0.2)
 
-plt.title("Mean error vs. k")
-plt.xlabel("k")
+plt.title("Mean Approximation Error of kNN Attention")
+plt.xlabel("$k$")
 plt.ylabel("Mean error")
 plt.legend()
 

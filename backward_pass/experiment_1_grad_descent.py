@@ -1,6 +1,3 @@
-# Experiment 1: Gradient descent on a convex loss function using our method vs the naive method.
-# Convex loss function: 0.5 * (O ** 4) + (O ** 2) + 1
-
 import torch
 from torch import nn
 from naive_attention import naive_attention
@@ -13,6 +10,8 @@ d = 5
 
 # Input sequence length
 N = 1000
+
+lr = 0.1
 
 # Q,K,V matrices - input to self-attention
 Q = torch.randn(N, d, requires_grad=True)
@@ -27,7 +26,7 @@ V_copy_fast = V.clone().detach().requires_grad_(True)
 # We'll compare the descent with the gradients calculated using our method, vs
 # the gradients calculated using the naive method.
 iteration = 0
-num_iterations = 30
+num_iterations = 1000
 losses_fast = []
 losses = []
 while iteration != num_iterations:
@@ -42,8 +41,9 @@ while iteration != num_iterations:
     O.retain_grad()
     
     # Calculate the loss. Our loss is a convex function.
-    loss_fast = torch.mean((O_fast ** 2) + (O_fast) + 1)
-    loss = torch.mean((O ** 2) +  (O) + 1)
+    # Loss = 0.5 * x^2 + 3x + 2
+    loss_fast = torch.mean(0.5 * (O_fast ** 2) + 3 * O_fast + 2)
+    loss = torch.mean(0.5 * (O ** 2) + 3 * O + 2)
 
     losses_fast.append(loss_fast.item())
     losses.append(loss.item())
@@ -70,13 +70,13 @@ while iteration != num_iterations:
 
     # Update the Q, V matrices
     with torch.no_grad():
-        Q -= 0.05 * Q.grad
-        V -= 0.05 * V.grad
+        Q -= lr * Q.grad
+        V -= lr * V.grad
         Q.grad.zero_()
         V.grad.zero_()
 
-        Q_copy_fast -= 0.05 * dQ_fast
-        V_copy_fast -= 0.05 * dV_fast
+        Q_copy_fast -= lr * dQ_fast
+        V_copy_fast -= lr * dV_fast
 
 # Plot the loss and the loss from the fast gradients
 plt.plot(losses_fast)
@@ -84,6 +84,6 @@ plt.plot(losses)
 plt.legend(['Fast gradients', 'Naive gradients'])
 plt.xlabel('Iteration')
 plt.ylabel('Loss')
-plt.title('Loss convex: 0.5 * (O ** 4) + (O ** 2) + 1')
+plt.title(r"Loss: $\phi(x) = 0.5x^2 + 3x + 2$")
 plt.show()
 
