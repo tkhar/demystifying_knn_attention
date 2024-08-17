@@ -10,11 +10,11 @@ https://github.com/huggingface/transformers/blob/main/src/transformers/models/gp
 import math
 import inspect
 from dataclasses import dataclass
+from knn_attention import attn_forward_batched
 
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-from fast_sampling_attention import attn_forward_batched
 
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
@@ -26,80 +26,59 @@ class LayerNorm(nn.Module):
 
     def forward(self, input):
         return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
-    
-class Attention(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, q, k, v, bias, attn_dropout):
-        ctx.save_for_backward(q, k, v)
-        T = q.size(-2)
-        att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-        att = att.masked_fill(bias[:,:,:T,:T] == 0, float('-inf'))
-        att = F.softmax(att, dim=-1)
-        att = attn_dropout(att)
-        y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
-        return y
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        q, k, v = ctx.saved_tensors
-        P = F.softmax((q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1))), dim=-1)
-        grad_v = P.transpose(-2, -1) @ grad_output
-
-        grad_p = grad_output @ v.transpose(-2, -1)
-        grad_S = P * grad_p - P * (torch.sum(P * grad_p, dim=-1, keepdim=True).repeat(1, 1, 1, P.size(-1)))
-
-        grad_q = grad_S @ k
-        grad_k = grad_S.transpose(-2, -1) @ q
-        
-        return grad_q, grad_k, grad_v, None, None
 
 class CausalSelfAttention(nn.Module):
 
-    def __init__(self, config):
-        super().__init__()
-        assert config.n_embd % config.n_head == 0
+	def __init__(self, config):
+		super().__init__()
+		assert config.n_embd % config.n_head == 0
         # key, query, value projections for all heads, but in a batch
-        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
+		self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
         # output projection
-        self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+		self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
         # regularization
-        self.attn_dropout = nn.Dropout(config.dropout)
-        self.resid_dropout = nn.Dropout(config.dropout)
-        self.n_head = config.n_head
-        self.n_embd = config.n_embd
-        self.dropout = config.dropout
+		self.attn_dropout = nn.Dropout(config.dropout)
+		self.resid_dropout = nn.Dropout(config.dropout)
+		self.n_head = config.n_head
+		self.n_embd = config.n_embd
+		self.dropout = config.dropout
+		self.block_size = config.block_size
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
-        self.flash = False #hasattr(torch.nn.functional, 'scaled_dot_product_attention')
-        if not self.flash:
-            print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
+		self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
+		if not self.flash:
+			print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
             # causal mask to ensure that attention is only applied to the left in the input sequence
-            self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
-                                        .view(1, 1, config.block_size, config.block_size))
+			self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
+									.view(1, 1, config.block_size, config.block_size))
 
-    def forward(self, x):
-        B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
+	def forward(self, x, use_approximation=False, use_slow_attention=False):
+		B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
-        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q, k, v  = self.c_attn(x).split(self.n_embd, dim=2)
-        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+		# calculate query, key, values for all heads in batch and move head forward to be the batch dim
+		q, k, v  = self.c_attn(x).split(self.n_embd, dim=2)
+		k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+		q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+		v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        if self.flash:
-            # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
-        else:
+		if self.flash and use_approximation == False and use_slow_attention == False:
+			# efficient attention using Flash Attention CUDA kernels
+			y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
+		else:
+			self.register_buffer("bias", torch.tril(torch.ones(self.block_size, self.block_size)).view(1, 1, self.block_size, self.block_size).to("cuda"))
+			
             # manual implementation of attention
-            # y = Attention.apply(q, k, v, self.bias, self.attn_dropout)
-            # y_prime = attn_forward_batched(q, k, v)
-            # y = y_prime
-
-        y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
+			att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+			att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+			att = F.softmax(att, dim=-1)
+			att = self.attn_dropout(att)
+			y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+            # y = attn_forward_batched(q,k,v)
+		y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
 
         # output projection
-        y = self.resid_dropout(self.c_proj(y))
-        return y
+		y = self.resid_dropout(self.c_proj(y))
+		return y
 
 class MLP(nn.Module):
 
@@ -126,8 +105,8 @@ class Block(nn.Module):
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
-    def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
+    def forward(self, x, use_approximation=False, use_slow_attention=False):
+        x = x + self.attn(self.ln_1(x), use_approximation, use_slow_attention)
         x = x + self.mlp(self.ln_2(x))
         return x
 
@@ -193,7 +172,7 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx, targets=None):
+    def forward(self, idx, targets=None, use_approximation=False, use_slow_attention=False):
         device = idx.device
         b, t = idx.size()
         assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
@@ -204,7 +183,7 @@ class GPT(nn.Module):
         pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
         for block in self.transformer.h:
-            x = block(x)
+            x = block(x, use_approximation, use_slow_attention)
         x = self.transformer.ln_f(x)
 
         if targets is not None:
@@ -330,7 +309,6 @@ class GPT(nn.Module):
 
     @torch.no_grad()
     def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
-        print("Generating some text...")
         """
         Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
         the sequence max_new_tokens times, feeding the predictions back into the model each time.
@@ -347,7 +325,6 @@ class GPT(nn.Module):
             if top_k is not None:
                 v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
                 logits[logits < v[:, [-1]]] = -float('Inf')
-                
             # apply softmax to convert logits to (normalized) probabilities
             probs = F.softmax(logits, dim=-1)
             # sample from the distribution

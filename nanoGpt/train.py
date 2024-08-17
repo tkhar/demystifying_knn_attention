@@ -35,7 +35,7 @@ from model import GPTConfig, GPT
 out_dir = 'out'
 eval_interval = 2000
 log_interval = 1
-eval_iters = 200
+eval_iters = 10
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
@@ -71,7 +71,8 @@ backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
-compile = True # use PyTorch 2.0 to compile the model to be faster
+compile = True # use PyTorch 2.0 to compile the model to be faster. This uses torch._dynamo. It doesn't fully
+			   # work with approximations, so disable it for that...
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
@@ -213,7 +214,7 @@ if ddp:
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
-def estimate_loss():
+def estimate_loss(use_slow_attention=False):
     out = {}
     model.eval()
     for split in ['train', 'val']:
@@ -221,11 +222,28 @@ def estimate_loss():
         for k in range(eval_iters):
             X, Y = get_batch(split)
             with ctx:
-                logits, loss = model(X, Y)
+                logits, loss = model(X, Y, use_slow_attention=use_slow_attention)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
     return out
+
+# Estimating loss but model is now using approximate attention.
+@torch.no_grad()
+def estimate_loss_with_approximation():
+	out = {}
+	model.eval()
+	approx_eval_iters = 10
+	for split in ['train', 'val']:
+		losses = torch.zeros(approx_eval_iters)
+		for k in range(approx_eval_iters):
+			X, Y = get_batch(split)
+			with ctx:
+				_, loss = model(X,Y, use_approximation=True)
+			losses[k] = loss.item()
+		out[split] = losses.mean()
+	model.train()
+	return out
 
 # learning rate decay scheduler (cosine with warmup)
 def get_lr(it):
@@ -261,8 +279,14 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        losses = estimate_loss()
+        losses = estimate_loss(use_slow_attention=True)
         print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        print(f"Validation Perplexity without approximation = {torch.exp(losses['val'])}")
+        print(f"Train Perplexity without approximation = {torch.exp(losses['train'])}")
+        
+        losses_approximation = estimate_loss_with_approximation()
+        print(f"Validation Perplexity with approximation = {torch.exp(losses_approximation['val'])}")
+        print(f"Train Perplexity with approximation = {torch.exp(losses_approximation['train'])}")            
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
@@ -331,6 +355,7 @@ while True:
     # termination conditions
     if iter_num > max_iters:
         break
+
 
 if ddp:
     destroy_process_group()
