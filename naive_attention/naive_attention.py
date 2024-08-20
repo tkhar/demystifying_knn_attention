@@ -32,7 +32,7 @@ def calculate_attention_batched(Q,K,V):
     attention_scores = attention_scores.masked_fill(mask == 0, float('-inf'))
 
     # Normalize the attention scores by dividing by d.
-    # attention_scores = attention_scores # / D **0.5
+    attention_scores = attention_scores / (D **0.5)
     
     # Apply softmax to get the attention weights
     attention_weights = torch.softmax(attention_scores, dim=-1)
