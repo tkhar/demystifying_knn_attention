@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from naive_attention import naive_attention
-from forward_pass.forward_pass import attn_forward
+from forward_pass.forward_pass import attn_forward_unvectorized
 
 
 def run_experiment(Q, K, V, n, d):
@@ -9,8 +9,8 @@ def run_experiment(Q, K, V, n, d):
     # Call the naive_attention function.
     naive_output = naive_attention.calculate_attention(Q, K, V)
 
-    # Call the attn_forward function.
-    attn_output = attn_forward(Q, K, V)
+    # Call the attn_forward_unvectorized function.
+    attn_output = attn_forward_unvectorized(Q, K, V)
 
     return torch.max(torch.abs(naive_output - attn_output))
 

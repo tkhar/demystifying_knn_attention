@@ -104,6 +104,7 @@ def fast_grad_Q(Q,K,V, dO, epsilon=0.2, delta=0.1):
 
     return dQ
 
+# Not implemented yet.
 def fast_grad_K(Q,K,V, dO, epsilon=0.05, delta=0.1):
     dK = torch.zeros_like(K)
 

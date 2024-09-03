@@ -35,7 +35,7 @@ from model import GPTConfig, GPT
 out_dir = 'out'
 eval_interval = 2000
 log_interval = 1
-eval_iters = 10
+eval_iters = 5
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
@@ -71,8 +71,8 @@ backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
-compile = True # use PyTorch 2.0 to compile the model to be faster. This uses torch._dynamo. It doesn't fully
-			   # work with approximations, so disable it for that...
+compile = False # use PyTorch 2.0 to compile the model to be faster. This uses torch._dynamo. It doesn't fully
+			   # work with approximations, so you might need to disable it for that...
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
@@ -211,6 +211,8 @@ if compile:
 # wrap model into DDP container
 if ddp:
     model = DDP(model, device_ids=[ddp_local_rank])
+    
+eval_iters = 3
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
@@ -220,6 +222,7 @@ def estimate_loss(use_slow_attention=False):
     for split in ['train', 'val']:
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
+            print(f"Eval iteration: {k}/{eval_iters}")
             X, Y = get_batch(split)
             with ctx:
                 logits, loss = model(X, Y, use_slow_attention=use_slow_attention)
@@ -233,10 +236,11 @@ def estimate_loss(use_slow_attention=False):
 def estimate_loss_with_approximation():
 	out = {}
 	model.eval()
-	approx_eval_iters = 10
+
 	for split in ['train', 'val']:
-		losses = torch.zeros(approx_eval_iters)
-		for k in range(approx_eval_iters):
+		losses = torch.zeros(eval_iters)
+		for k in range(eval_iters):
+			print(f"Approx Eval iteration: {k}/{eval_iters}")
 			X, Y = get_batch(split)
 			with ctx:
 				_, loss = model(X,Y, use_approximation=True)
@@ -279,14 +283,14 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        losses = estimate_loss(use_slow_attention=True)
-        print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
-        print(f"Validation Perplexity without approximation = {torch.exp(losses['val'])}")
-        print(f"Train Perplexity without approximation = {torch.exp(losses['train'])}")
+        # losses = estimate_loss(use_slow_attention=True)
+        # print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        # print(f"Validation Perplexity without approximation = {torch.exp(losses['val'])}")
+        # print(f"Train Perplexity without approximation = {torch.exp(losses['train'])}")
         
-        losses_approximation = estimate_loss_with_approximation()
-        print(f"Validation Perplexity with approximation = {torch.exp(losses_approximation['val'])}")
-        print(f"Train Perplexity with approximation = {torch.exp(losses_approximation['train'])}")            
+        losses = estimate_loss_with_approximation()
+        print(f"Validation Perplexity with approximation = {torch.exp(losses['val'])}")
+        print(f"Train Perplexity with approximation = {torch.exp(losses['train'])}")            
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
@@ -321,7 +325,7 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            logits, loss = model(X, Y)
+            logits, loss = model(X, Y, use_approximation=True)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X, Y = get_batch('train')

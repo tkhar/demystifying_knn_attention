@@ -4,7 +4,7 @@ import os
 import numpy as np
 from _clustering.clustering_topk import clustering_topk, clustering_topk_preprocessing_flatl2, clustering_topk_preprocessing_ivff_index
 from _clustering.clustering_topk import clustering_topk_ip_index, clustering_topk_preprocessing_ip_index
-from forward_pass import sampling_attention_0
+from forward_pass import forward_pass_unoptimized
 from naive_attention import naive_attention
 import math
 
@@ -28,7 +28,7 @@ def run_experiment(Q, K, V, n, d, B, run_exact=True, store=False, verbose=False)
 
     # Call the sampling_attention function.
     attention_output = \
-        sampling_attention_0.sampling_attention_clustering_v2(Q, K, V, \
+        forward_pass_unoptimized.sampling_attention_clustering_v2(Q, K, V, \
                                                             k, l, \
                                                             topk_scores, \
                                                             topk_indices, \

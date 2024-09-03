@@ -2,7 +2,7 @@ import torch
 import time
 import numpy as np
 from .topk_lsh import topk_indices_lsh_preprocessing, topk_indices_fast_lsh
-from forward_pass import sampling_attention_0
+from forward_pass import forward_pass_unoptimized
 from naive_attention import naive_attention
 import math
 
@@ -28,7 +28,7 @@ print("Pre-processing done in time ", time.time() - start_time)
 for lsh_object in lsh_objects:
     lsh_object.print_buckets()
 
-attention_output = sampling_attention_0.sampling_attention(Q, K, V, \
+attention_output = forward_pass_unoptimized.sampling_attention(Q, K, V, \
                                                          k, \
                                                          l, \
                                                          topk_indices_fast_lsh, \

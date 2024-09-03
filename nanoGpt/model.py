@@ -59,6 +59,9 @@ class CausalSelfAttention(nn.Module):
 		k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
 		q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
 		v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+		
+		# use_slow_attention = False
+		# use_approximation = True
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
 		if self.flash and use_approximation == False and use_slow_attention == False:
@@ -68,12 +71,21 @@ class CausalSelfAttention(nn.Module):
 			self.register_buffer("bias", torch.tril(torch.ones(self.block_size, self.block_size)).view(1, 1, self.block_size, self.block_size).to("cuda"))
 			
             # manual implementation of attention
-			att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-			att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
-			att = F.softmax(att, dim=-1)
-			att = self.attn_dropout(att)
-			y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
-            # y = attn_forward_batched(q,k,v)
+			# if use_slow_attention:
+			# att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+			# att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+			# att = F.softmax(att, dim=-1)
+			# att = self.attn_dropout(att)
+			# y_e = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+			#else:
+			y = attn_forward_batched(q,k,v)
+				
+			# print(f"Max Attention error = {torch.max(y_e-y_a)}, Mean Attention Error = {torch.mean(y_e-y_a)}")
+			# if use_slow_attention:
+				# y = y_e
+			# else:
+				# y = y_a
+			
 		y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
 
         # output projection
