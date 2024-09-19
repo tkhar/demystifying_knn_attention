@@ -1,3 +1,6 @@
+# Description: This file contains the forward pass functions for the attention mechanism.
+# We implement kNN attention in a vectorized manner.
+
 import torch
 from softmax_expectation.softmax_expectation import softmax_expectation_estimation_faster
 from softmax_expectation.topk import topk

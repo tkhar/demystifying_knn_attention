@@ -3,16 +3,18 @@ import numpy as np
 from naive_attention.naive_attention import calculate_attention_batched
 from forward_pass.forward_pass import attn_forward_batched
 import time
-import tracemalloc
 import math
 import matplotlib.pyplot as plt
+import matplotlib as mpl
+
+mpl.rcParams['figure.dpi']= 300
 
 def run_experiment(Q, K, V, k=2):
 
     # Call the naive_attention function.
-    # start_time = time.time()
-    # naive_output = calculate_attention_batched(Q, K, V)
-    # print("Naive time = ", time.time() - start_time)
+    start_time = time.time()
+    naive_output = calculate_attention_batched(Q, K, V)
+    print("Naive time = ", time.time() - start_time)
     # print(naive_output)
 
     # Call the attn_forward function.
@@ -21,25 +23,25 @@ def run_experiment(Q, K, V, k=2):
     print("Attn time = ", time.time() - start_time)
     # print(attn_output)
 
-    return (0,0) # torch.mean(torch.abs(naive_output - attn_output)), torch.max(torch.abs(naive_output - attn_output))
+    return torch.mean(torch.abs(naive_output - attn_output)), torch.max(torch.abs(naive_output - attn_output))
 
 torch.manual_seed(0)
 b = 1
 h = 10
-n, d = 100000, 32
+n, d = 1000, 64
 
 # Range k.
-kk = [int(n ** 0.25)]#, int(n ** 0.25)]#, int(n ** 0.125), int(math.log(n)), 3]
+kk = [int(n ** 0.5), int(n ** 0.25), int(n ** 0.125), int(math.log(n)), 3]
 kk = sorted(list(set(kk)))
-kk_labels = [r"$n^{1/4}$"]#, r"$n^{1/2}$"] #r"2", r"$\log(n)$", r"$n^{1/8}$", r"$n^{1/4}$", r"$n^{1/2}$"]
+kk_labels = [r"3", r"$\log(n)$", r"$n^{1/8}$", r"$n^{1/4}$", r"$n^{1/2}$"]
 if len(kk_labels) != len(kk):
     print(kk)
     print(kk_labels)
     raise ValueError("kk_labels and kk must have the same length.")
 
 # Range B.
-BB = [2]
-colors = ['b']#, 'r', 'g']
+BB = [10, 30, 50]
+colors = ['b', 'r', 'g']
 
 means = []
 maxs = []
@@ -64,7 +66,7 @@ for i, B in enumerate(BB):
 
         print("B = ", B, "k = ", k)
 
-        num_iterations = 1
+        num_iterations = 4
         
         results_mean = []
         results_max = []
@@ -85,29 +87,26 @@ for i, B in enumerate(BB):
         print("Max error = ", maxs[i][-1], "with std dev = ", std_devs_max[i][-1])
 
 # Generate two subplots, one for the mean and one for the max.
-fig, axs = plt.subplots(2)
+# Put the plots side by side.
+fig, axs = plt.subplots(1, 1)
 
 # Plot the mean.
 for i, B in enumerate(BB):
-    axs[0].plot(kk_labels, means[i], label=f"B = {B}", color=colors[i])
+    axs.plot(kk_labels, means[i], label=f"B = {B}", color=colors[i])
     means[i] = np.array(means[i])
     std_devs_mean[i] = np.array(std_devs_mean[i])
-    axs[0].fill_between(kk_labels, means[i] - std_devs_mean[i], means[i] + std_devs_mean[i], color=colors[i], alpha=0.2)
+    axs.fill_between(kk_labels, means[i] - std_devs_mean[i], means[i] + std_devs_mean[i], color=colors[i], alpha=0.2)
 
 # Plot the max.
-for i, B in enumerate(BB):
-    axs[1].plot(kk_labels, maxs[i], label=f"B = {B}", color=colors[i])
-    maxs[i] = np.array(maxs[i])
-    axs[1].fill_between(kk_labels, maxs[i] - std_devs_max[i], maxs[i] + std_devs_max[i], color=colors[i], alpha=0.2)
+# for i, B in enumerate(BB):
+#     axs.plot(kk_labels, maxs[i], label=f"B = {B}", color=colors[i], linestyle='dashed')
+#     maxs[i] = np.array(maxs[i])
+#     axs.fill_between(kk_labels, maxs[i] - std_devs_max[i], maxs[i] + std_devs_max[i], color=colors[i], alpha=0.2)
 
 # Set the labels. For $k$ we use the labels in kk_labels.
-axs[0].set_title("Mean Approximation Error of kNN Attention")
-axs[0].set_ylabel("Mean error")
-axs[0].legend()
+axs.set_ylabel("Error")
+axs.set_xlabel("$k$")
+axs.set_title("$k$NN Attention Error")
+axs.legend()
 
-axs[1].set_title("Max Approximation Error of kNN Attention")
-axs[1].set_xlabel("$k$")
-axs[1].set_ylabel("Max error")
-axs[1].legend()
-
-plt.show()
+plt.savefig('forward_pass/assets/forward_pass_test_batched.png')

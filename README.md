@@ -1,8 +1,8 @@
 # Demystifying kNN Attention: A Theoretical Foundation
-This repo contains experiments for the paper [Demystifying kNN Attention: A Theoretical Foundation](Link here).  
+This repo contains experiments for the paper **"Demystifying kNN Attention: A Theoretical Foundation"**
 
-<img src="forward_pass/assets/perplexity_training.png" width="500" >
-<img src="forward_pass/assets/efficiency_3.png" width="510" >
+<img src="assets/efficiency_4.png" width="500" >
+<img src="assets/perplexity_training.png" width="485" >
 
 ## Code Structure
 The code structure can be seen below. Major files included only.
@@ -31,26 +31,17 @@ The code structure can be seen below. Major files included only.
 └── _archived: contains old experiments and code.
 ```
 
-Find created assets in *assets* directories.
+Find created assets like images in *assets* directories.
 
 ## Replication Instructions
 
 ### Required Packages
 For *nanoGpt*: follow the instructions on the repo there. The `knn_attention.py` file contains all the logic for KNN Attention, which is incorporated in the `model.py` and `train.py` files. 
 
-For *everything else*: ensure you have `torch` installed. The code and experiments run on a CPU, and they use META's `faiss` package for KNN indexing, for which the documentation can be found [Here](https://faiss.ai/). If you want to scale these experiments to run on a GPU, you'll have to install the `faiss-gpu` package.
+For *everything else*: ensure you have `torch` installed. The code and experiments run on a CPU, and they use META's `faiss` package for KNN indexing, for which the documentation can be found [here](https://faiss.ai/). If you want to scale these experiments to run on a GPU, you'll have to install the `faiss-gpu` package.
 
 ### Running the code
 All experiments are in self-contained Python modules which you can simply run and modify. The `nanoGpt` experiments may require a GPU, but due to the versatility of the code can also be run using a simple Python command-line.
-
-## Citation
-If you use our method or work, please cite the [paper](link here):
-```
-@article{
-
-
-}
-```
 
 
 

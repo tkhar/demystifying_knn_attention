@@ -1,3 +1,7 @@
+# This file contains the unoptimized version of the forward pass functions.
+# It is kept for reference and comparison purposes.
+# See forward_pass.py for the optimized version.
+
 import numpy as np
 import torch
 import time
